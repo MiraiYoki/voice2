@@ -16,6 +16,13 @@ import {
 } from './config.js';
 
 // ── 5a. JWT生成 (浏览器WebCrypto) ──
+function b64u(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
 export async function makeLKToken(identity, room) {
   try {
     const hdr = { alg: 'HS256', typ: 'JWT' };
@@ -25,8 +32,8 @@ export async function makeLKToken(identity, room) {
       video: { room, roomJoin: true, canPublish: true, canSubscribe: true },
     };
     const enc = new TextEncoder();
-    const h = btoa(JSON.stringify(hdr)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-    const p = btoa(JSON.stringify(pld)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const h = b64u(JSON.stringify(hdr));
+    const p = b64u(JSON.stringify(pld));
     const keyData = enc.encode(LIVEKIT_SECRET);
     const key = await crypto.subtle.importKey('raw', keyData,
       { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
