@@ -80,8 +80,14 @@ export function setupAudioNodes(pid, remoteStream) {
   const audioEl = document.createElement('audio');
   audioEl.muted = true;
   audioEl.srcObject = remoteStream;
-  audioEl.play().catch(() => {});
+  audioEl.play().catch(e => log('audio.play失败: ' + e.message));
   info._audioEl = audioEl;
+
+  // DEBUG: 旁路非静音播放，验证音轨是否有数据
+  const testEl = document.createElement('audio');
+  testEl.srcObject = remoteStream;
+  testEl.play().catch(e => log('test.play失败: ' + e.message));
+  info._testEl = testEl;
 
   const src = state.audioCtx.createMediaStreamSource(remoteStream);
 
