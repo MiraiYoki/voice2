@@ -1,0 +1,317 @@
+// ╔══════════════════════════════════════════╗
+// ║  5. AudioController (LiveKit + 空间音频)   ║
+// ╚══════════════════════════════════════════╝
+// 对标 spatial-audio SpatialAudioController + NetcodeController
+// 修复: 坐标系(像素直传) + iOS降级 + selective sub + 防爆音
+
+import { Room } from 'livekit-client';
+import { state } from './state.js';
+import { $, toast } from './utils.js';
+import { updateRoomCount } from './registry.js';
+import { startPositionSync } from './netcode.js';
+import {
+  LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET,
+  ROOM_SIZE, COLORS,
+  PANNER_REF_DISTANCE, PANNER_MAX_DISTANCE, PANNER_ROLLOFF_FACTOR, EARSHOT_RADIUS,
+} from './config.js';
+
+// ── 5a. JWT生成 (浏览器WebCrypto) ──
+export async function makeLKToken(identity, room) {
+  const hdr = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const pld = {
+    iss: LIVEKIT_KEY, sub: identity, nbf: now, exp: now + 86400,
+    video: { room, roomJoin: true, canPublish: true, canSubscribe: true },
+  };
+  const enc = new TextEncoder();
+  const h = btoa(JSON.stringify(hdr)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const p = btoa(JSON.stringify(pld)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const key = await crypto.subtle.importKey('raw', enc.encode(LIVEKIT_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(h + '.' + p));
+  const s = btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  return h + '.' + p + '.' + s;
+}
+
+// ── 5b. 空间音频管线 (对标 spatial-audio PublicationRenderer) ──
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+
+export function setupAudioNodes(pid, remoteStream) {
+  if (!state.audioCtx) return;
+  let info = state.peers.get(pid);
+  if (!info) {
+    info = { x: ROOM_SIZE / 2, y: ROOM_SIZE / 2 };
+    state.peers.set(pid, info);
+  }
+  if (info.stream) return;
+  info.stream = remoteStream;
+
+  // <audio muted> dual-track — spatial-audio 同款
+  const audioEl = document.createElement('audio');
+  audioEl.muted = true;
+  audioEl.srcObject = remoteStream;
+  audioEl.play().catch(() => {});
+  info._audioEl = audioEl;
+
+  const src = state.audioCtx.createMediaStreamSource(remoteStream);
+
+  if (isIOS) {
+    // iOS: PannerNode 不工作 → GainNode 距离衰减
+    // https://developer.apple.com/forums/thread/696034
+    const gain = state.audioCtx.createGain();
+    gain.gain.value = 1;
+    src.connect(gain).connect(state.audioCtx.destination);
+    info.gainNode = gain;
+    info._isIOS = true;
+  } else {
+    // 桌面/Android: 完整 HRTF 空间音频
+    const panner = state.audioCtx.createPanner();
+    const gain = state.audioCtx.createGain();
+
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'exponential';
+    panner.refDistance = PANNER_REF_DISTANCE;
+    panner.maxDistance = PANNER_MAX_DISTANCE;
+    panner.rolloffFactor = PANNER_ROLLOFF_FACTOR;
+    panner.coneOuterAngle = 360;
+    panner.coneInnerAngle = 360;
+    panner.coneOuterGain = 1;
+
+    // 防爆音: 初始位置设为实际相对坐标 (不是 0,0,0)
+    const rx = info.x - state.myPos.x;
+    const ry = info.y - state.myPos.y;
+    if (panner.positionX) {
+      panner.positionX.setValueAtTime(rx, 0);
+      panner.positionZ.setValueAtTime(ry, 0);
+    } else {
+      panner.setPosition(rx, 0, ry);
+    }
+
+    src.connect(panner);
+    panner.connect(gain);
+
+    // AnalyserNode — 说话检测
+    const volA = state.audioCtx.createAnalyser();
+    volA.fftSize = 256;
+    gain.connect(volA);
+    volA.connect(state.audioCtx.destination);
+
+    info.source = src;
+    info.panner = panner;
+    info.gainNode = gain;
+    info._volBuf = new Uint8Array(volA.frequencyBinCount);
+    info.smoothedVol = 0;
+
+    // 音量 tick — 驱动说话光晕
+    (function tick() {
+      if (!state.peers.has(pid)) return;
+      volA.getByteFrequencyData(info._volBuf);
+      const avg = info._volBuf.reduce((a, b) => a + b, 0) / info._volBuf.length;
+      info.smoothedVol = info.smoothedVol * 0.6 + avg * 0.4;
+      requestAnimationFrame(tick);
+    })();
+  }
+
+  updateSpatialAudio();
+}
+
+// ── 5c. 空间位置更新 (对标 spatial-audio: 像素坐标直传) ──
+export function updateSpatialAudio() {
+  if (!state.audioCtx) return;
+  // Listener 留在 origin (0,0,0) — AudioContext 默认
+  // 每个 panner 设置为 peer 相对 listener 的位置
+
+  for (const [pid, p] of state.peers) {
+    const rx = p.x - state.myPos.x;
+    const ry = p.y - state.myPos.y;
+    const tNow = state.audioCtx.currentTime;
+
+    if (p._isIOS) {
+      // GainNode 距离衰减 (线性)
+      const dist = Math.sqrt(rx * rx + ry * ry);
+      let vol;
+      if (dist < PANNER_REF_DISTANCE) {
+        vol = 1;
+      } else if (dist > PANNER_MAX_DISTANCE) {
+        vol = 0;
+      } else {
+        vol = 1 - (dist - PANNER_REF_DISTANCE) / (PANNER_MAX_DISTANCE - PANNER_REF_DISTANCE);
+      }
+      if (p.gainNode) p.gainNode.gain.setTargetAtTime(vol, tNow, 0.02);
+    } else if (p.panner) {
+      // 对标 spatial-audio: positionX/Z 用像素坐标 + 20ms ramp
+      if (p.panner.positionX) {
+        p.panner.positionX.setTargetAtTime(rx, tNow, 0.02);
+        p.panner.positionZ.setTargetAtTime(ry, tNow, 0.02);
+      } else {
+        p.panner.setPosition(rx, 0, ry);
+      }
+    }
+  }
+}
+
+// ── 5d. 推讲 (toggleMic) ──
+export async function toggleMic() {
+  if (state.micBusy) return;
+  state.micBusy = true;
+  try {
+    if (state.localStream) {
+      state.localStream.getAudioTracks().forEach(t => t.stop());
+      state.localStream = null;
+      updateMicUI(false);
+    } else {
+      if (state.audioCtx) { try { await state.audioCtx.close(); } catch (e) {} state.audioCtx = null; }
+      await new Promise(r => setTimeout(r, 150));
+      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
+      if (!state.audioCtx) { state.audioCtx = new AudioContext(); state.audioCtx.resume(); }
+      updateMicUI(true);
+    }
+  } catch (e) {
+    toast('麦克风切换失败');
+  } finally {
+    state.micBusy = false;
+  }
+}
+
+export function updateMicUI(on) {
+  const btn = $('btn-mic'), label = $('self-mic');
+  if (!btn || !label) return;
+  btn.textContent = on ? '🎤' : '🎧';
+  btn.style.background = on ? 'var(--accent-dim)' : 'var(--danger-dim)';
+  label.textContent = on ? '发言中 · 单声道' : '收听中 · 立体声';
+  label.style.color = on ? 'var(--accent)' : 'var(--danger)';
+}
+
+// ── 5e. 连接LiveKit (含 DataChannel — R2拆到 netcode.js) ──
+export function connectLiveKit(roomName) {
+  const lkRoom = new Room();
+  state._lkRoom = lkRoom;
+
+  makeLKToken(state.myPeerId, roomName).then(jwt => {
+    lkRoom.connect(LIVEKIT_URL, jwt).then(() => {
+      toast('🔊 语音已连接');
+
+      // 发布本地音轨
+      if (state.localStream) {
+        const track = state.localStream.getAudioTracks()[0];
+        if (track) {
+          lkRoom.localParticipant.publishTrack(track, { name: 'mic' })
+            .then(() => toast('📤 麦克风已发布'))
+            .catch(() => toast('⚠️ 麦克风发布失败'));
+        }
+      }
+
+      // ── 远端音轨订阅 ──
+      lkRoom.on('trackSubscribed', (track, pub, participant) => {
+        if (track.kind !== 'audio') return;
+        const pid = participant.identity;
+        const remoteStream = new MediaStream([track.mediaStreamTrack]);
+
+        if (!state.peers.has(pid)) {
+          state.peers.set(pid, {
+            x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
+            name: participant.name || pid.slice(-6),
+            micOn: true, isSpeaking: false,
+            color: COLORS[state.peers.size % COLORS.length],
+            _snaps: [{ x: ROOM_SIZE / 2, y: ROOM_SIZE / 2, t: Date.now() }],
+          });
+        }
+        const info = state.peers.get(pid);
+        info._pub = pub;  // 存 publication 引用 → selective sub
+        setupAudioNodes(pid, remoteStream);
+      });
+
+      // ── 参与者事件 ──
+      lkRoom.on('participantDisconnected', p => {
+        const pid = p.identity;
+        if (state.peers.has(pid)) {
+          removePeer(pid);
+          updateRoomCount();
+          toast('有人离开了');
+        }
+      });
+
+      lkRoom.on('participantConnected', p => {
+        const pid = p.identity;
+        if (pid === state.myPeerId || state.peers.has(pid)) return;
+        state.peers.set(pid, {
+          x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
+          name: p.name || pid.slice(-6),
+          micOn: true, isSpeaking: false,
+          color: COLORS[state.peers.size % COLORS.length],
+          _snaps: [{ x: ROOM_SIZE / 2, y: ROOM_SIZE / 2, t: Date.now() }],
+        });
+        updateRoomCount();
+      });
+
+      // ── DataChannel 位置同步 (拆到 netcode.js) ──
+      startPositionSync(lkRoom);
+
+      // ── 选择性订阅 (对标 spatial-audio: trackPublication.setSubscribed) ──
+      const subInterval = setInterval(() => {
+        for (const [pid, p] of state.peers) {
+          if (!p._pub) continue;
+          const dist = Math.sqrt((p.x - state.myPos.x) ** 2 + (p.y - state.myPos.y) ** 2);
+          const hearable = dist <= EARSHOT_RADIUS;
+          try { p._pub.setSubscribed(hearable); } catch (e) { /* ignore */ }
+        }
+      }, 500);
+      state._dcIntervals.push(subInterval);
+
+      // ── 启动自动避让 ──
+      startDucking();
+
+      // ── UI 切换 ──
+      $('game-bar').style.display = 'flex';
+      $('map-wrap').style.display = 'block';
+      $('status').textContent = '已连接';
+      // map-wrap 从 hidden→visible，canvas 需要 resize
+      import('./renderer.js').then(m => { m.resizeCanvas(); m.drawMap(); });
+
+    }).catch(e => {
+      toast('⚠️ 语音连接失败');
+      $('status').textContent = '音频未连接';
+    });
+  }).catch(e => {
+    toast('Token生成失败');
+  });
+}
+
+// ── 5f. peer清理 ──
+
+export function removePeer(pid) {
+  const p = state.peers.get(pid);
+  if (p) {
+    try { if (p.source) p.source.disconnect(); } catch (e) {}
+    try { if (p.panner) p.panner.disconnect(); } catch (e) {}
+    try { if (p.gainNode) p.gainNode.disconnect(); } catch (e) {}
+    try { if (p._audioEl) { p._audioEl.srcObject = null; p._audioEl.remove(); } } catch (e) {}
+    try { if (p.pc) p.pc.close(); } catch (e) {}
+    state.peers.delete(pid);
+  }
+  updateRoomCount();
+}
+
+// ── 5g. Ducking (自动避让 — 说话时压低其他人) ──
+export function startDucking() {
+  if (state.duckTimer) return;
+  state.duckTimer = setInterval(() => {
+    let loudest = null, loudestVol = 0;
+    for (const [pid, p] of state.peers) {
+      const vol = p.smoothedVol || 0;
+      if (vol > loudestVol) { loudestVol = vol; loudest = p; }
+    }
+    for (const [pid, p] of state.peers) {
+      if (!p.gainNode) continue;
+      const target = (loudestVol > 10 && p !== loudest) ? 0.3 : 1.0;
+      const cur = p.gainNode.gain.value;
+      p.gainNode.gain.value = cur + (target - cur) * 0.2;
+    }
+  }, 100);
+}
+
+export function stopDucking() {
+  if (state.duckTimer) { clearInterval(state.duckTimer); state.duckTimer = null; }
+}
