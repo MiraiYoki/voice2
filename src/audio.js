@@ -4,7 +4,7 @@
 // 对标 spatial-audio SpatialAudioController + NetcodeController
 // 修复: 坐标系(像素直传) + iOS降级 + selective sub + 防爆音
 
-import { Room } from 'livekit-client';
+import { Room, LocalAudioTrack } from 'livekit-client';
 import { state } from './state.js';
 import { $, toast } from './utils.js';
 import { updateRoomCount } from './registry.js';
@@ -98,13 +98,56 @@ export function setupAudioNodes(pid, remoteStream) {
     if (diagTicks === 10) clearInterval(diagTimer);
   }, 500);
 
-  // [诊断] 简化: src→gain→dest, 不做空间处理
-  const gain = state.audioCtx.createGain();
-  gain.gain.value = 1;
-  src.connect(gain).connect(state.audioCtx.destination);
-  info.gainNode = gain;
-  info._simple = true;
-  log('简化管线已连接');
+  if (isIOS) {
+    const gain = state.audioCtx.createGain();
+    gain.gain.value = 1;
+    src.connect(gain).connect(state.audioCtx.destination);
+    info.gainNode = gain;
+    info._isIOS = true;
+  } else {
+    const panner = state.audioCtx.createPanner();
+    const gain = state.audioCtx.createGain();
+
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'exponential';
+    panner.refDistance = PANNER_REF_DISTANCE;
+    panner.maxDistance = PANNER_MAX_DISTANCE;
+    panner.rolloffFactor = PANNER_ROLLOFF_FACTOR;
+    panner.coneOuterAngle = 360;
+    panner.coneInnerAngle = 360;
+    panner.coneOuterGain = 1;
+
+    const rx = info.x - state.myPos.x;
+    const ry = info.y - state.myPos.y;
+    if (panner.positionX) {
+      panner.positionX.setValueAtTime(rx, 0);
+      panner.positionZ.setValueAtTime(ry, 0);
+    } else {
+      panner.setPosition(rx, 0, ry);
+    }
+
+    src.connect(panner);
+    panner.connect(gain);
+
+    const volA = state.audioCtx.createAnalyser();
+    volA.fftSize = 256;
+    gain.connect(volA);
+    volA.connect(state.audioCtx.destination);
+
+    info.source = src;
+    info.panner = panner;
+    info.gainNode = gain;
+    info._volBuf = new Uint8Array(volA.frequencyBinCount);
+    info.smoothedVol = 0;
+
+    (function tick() {
+      if (!state.peers.has(pid)) return;
+      volA.getByteFrequencyData(info._volBuf);
+      const avg = info._volBuf.reduce((a, b) => a + b, 0) / info._volBuf.length;
+      info.smoothedVol = info.smoothedVol * 0.6 + avg * 0.4;
+      requestAnimationFrame(tick);
+    })();
+  }
 
   updateSpatialAudio();
 }
@@ -218,7 +261,8 @@ export async function connectLiveKit(roomName) {
       const tracks = state.localStream ? state.localStream.getAudioTracks() : [];
       log('本地音轨: ' + tracks.length + ' 条');
       if (tracks.length > 0 && tracks[0].readyState === 'live') {
-        lkRoom.localParticipant.publishTrack(tracks[0], { name: 'mic' })
+        const audioTrack = new LocalAudioTrack(tracks[0]);
+        lkRoom.localParticipant.publishTrack(audioTrack, { name: 'mic' })
           .then(() => log('📤 已发布'))
           .catch(e => log('⚠️ 发布失败: ' + e.message));
       } else {
@@ -226,7 +270,8 @@ export async function connectLiveKit(roomName) {
       }
 
       lkRoom.on('trackSubscribed', (track, pub, participant) => {
-        log('🎵 音轨: ' + (participant.name || participant.identity).slice(0,8));
+        log('🎵 音轨: ' + (participant.name || participant.identity).slice(0,8)
+          + ' state=' + (track.mediaStreamTrack?.readyState || '?'));
         if (track.kind !== 'audio') return;
         const pid = participant.identity;
         const remoteStream = new MediaStream([track.mediaStreamTrack]);
