@@ -224,10 +224,13 @@ export function connectLiveKit(roomName) {
             .then(() => toast('📤 麦克风已发布'))
             .catch(() => toast('⚠️ 麦克风发布失败'));
         }
+      } else {
+        toast('🔇 未开麦，对方听不到你');
       }
 
       // ── 远端音轨订阅 ──
       lkRoom.on('trackSubscribed', (track, pub, participant) => {
+        toast('🎵 收到音轨: ' + (participant.name || participant.identity));
         if (track.kind !== 'audio') return;
         const pid = participant.identity;
         const remoteStream = new MediaStream([track.mediaStreamTrack]);
