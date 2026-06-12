@@ -98,56 +98,13 @@ export function setupAudioNodes(pid, remoteStream) {
     if (diagTicks === 10) clearInterval(diagTimer);
   }, 500);
 
-  if (isIOS) {
-    const gain = state.audioCtx.createGain();
-    gain.gain.value = 1;
-    src.connect(gain).connect(state.audioCtx.destination);
-    info.gainNode = gain;
-    info._isIOS = true;
-  } else {
-    const panner = state.audioCtx.createPanner();
-    const gain = state.audioCtx.createGain();
-
-    panner.panningModel = 'HRTF';
-    panner.distanceModel = 'exponential';
-    panner.refDistance = PANNER_REF_DISTANCE;
-    panner.maxDistance = PANNER_MAX_DISTANCE;
-    panner.rolloffFactor = PANNER_ROLLOFF_FACTOR;
-    panner.coneOuterAngle = 360;
-    panner.coneInnerAngle = 360;
-    panner.coneOuterGain = 1;
-
-    const rx = info.x - state.myPos.x;
-    const ry = info.y - state.myPos.y;
-    if (panner.positionX) {
-      panner.positionX.setValueAtTime(rx, 0);
-      panner.positionZ.setValueAtTime(ry, 0);
-    } else {
-      panner.setPosition(rx, 0, ry);
-    }
-
-    src.connect(panner);
-    panner.connect(gain);
-
-    const volA = state.audioCtx.createAnalyser();
-    volA.fftSize = 256;
-    gain.connect(volA);
-    volA.connect(state.audioCtx.destination);
-
-    info.source = src;
-    info.panner = panner;
-    info.gainNode = gain;
-    info._volBuf = new Uint8Array(volA.frequencyBinCount);
-    info.smoothedVol = 0;
-
-    (function tick() {
-      if (!state.peers.has(pid)) return;
-      volA.getByteFrequencyData(info._volBuf);
-      const avg = info._volBuf.reduce((a, b) => a + b, 0) / info._volBuf.length;
-      info.smoothedVol = info.smoothedVol * 0.6 + avg * 0.4;
-      requestAnimationFrame(tick);
-    })();
-  }
+  // [诊断] 简化: src→gain→dest, 不做空间处理
+  const gain = state.audioCtx.createGain();
+  gain.gain.value = 1;
+  src.connect(gain).connect(state.audioCtx.destination);
+  info.gainNode = gain;
+  info._simple = true;
+  log('简化管线已连接');
 
   updateSpatialAudio();
 }
