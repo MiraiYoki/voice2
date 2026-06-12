@@ -94,7 +94,7 @@ export function wireUI() {
   $('btn-create-room').onclick = () => joinRoom(true);
 
   // 首页 → 查找房间
-  $('btn-find-rooms').onclick = () => showPanel('room-panel');
+  $('btn-find-rooms').onclick = () => { showPanel('room-panel'); renderRoomList(); };
   $('room-back').onclick = () => showPanel('home-panel');
   $('room-search').oninput = () => renderRoomList();
 
