@@ -8,7 +8,7 @@ import { Room } from 'livekit-client';
 import { state } from './state.js';
 import { $, toast } from './utils.js';
 import { updateRoomCount } from './registry.js';
-import { startPositionSync } from './netcode.js';
+import { startPositionSync, sendProfile } from './netcode.js';
 import {
   LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET,
   ROOM_SIZE, COLORS,
@@ -264,6 +264,7 @@ export function connectLiveKit(roomName) {
 
       // ── DataChannel 位置同步 (拆到 netcode.js) ──
       startPositionSync(lkRoom);
+      sendProfile(lkRoom);
 
       // ── 选择性订阅 (对标 spatial-audio: trackPublication.setSubscribed) ──
       const subInterval = setInterval(() => {
