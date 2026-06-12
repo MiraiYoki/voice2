@@ -17,6 +17,11 @@ let _room = null;
 // ── 8a. 发送头像 (一次性, 可靠传输) ──
 export function sendProfile(room) {
   if (!state.profileAvatar) return;
+  // 头像超过 50KB 跳过 (DataChannel 上限约 64KB)
+  if (state.profileAvatar.length > 50000) {
+    console.warn('头像过大，跳过发送: ' + state.profileAvatar.length + ' bytes');
+    return;
+  }
   try {
     const payload = textEncoder.encode(JSON.stringify({
       channelId: 'profile',

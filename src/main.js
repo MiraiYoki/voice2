@@ -50,6 +50,11 @@ function init() {
   // ── 角色恢复 ──
   const hpn = $('home-profile-name');
   if (hpn) hpn.textContent = state.profileName || '未设置角色';
+  // 清除旧版超大头像 (>50KB 无法通过 DataChannel 发送)
+  if (state.profileAvatar && state.profileAvatar.length > 50000) {
+    localStorage.removeItem('voice-profile-avatar');
+    state.profileAvatar = '';
+  }
   if (state.profileAvatar) {
     $('home-avatar-ring').innerHTML = '<img src="' + state.profileAvatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
     $('avatar-preview').innerHTML = '<img src="' + state.profileAvatar + '" style="width:100%;height:100%;object-fit:cover">';
