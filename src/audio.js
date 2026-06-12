@@ -80,16 +80,23 @@ export function setupAudioNodes(pid, remoteStream) {
   const audioEl = document.createElement('audio');
   audioEl.muted = true;
   audioEl.srcObject = remoteStream;
-  audioEl.play().catch(e => log('audio.play失败: ' + e.message));
+  audioEl.play().catch(e => log('🎧 play失败: ' + e.message));
   info._audioEl = audioEl;
 
-  // DEBUG: 旁路非静音播放，验证音轨是否有数据
-  const testEl = document.createElement('audio');
-  testEl.srcObject = remoteStream;
-  testEl.play().catch(e => log('test.play失败: ' + e.message));
-  info._testEl = testEl;
-
   const src = state.audioCtx.createMediaStreamSource(remoteStream);
+
+  // 在 source 之后直接插入 AnalyserNode 诊断是否有音频数据
+  const diagA = state.audioCtx.createAnalyser();
+  diagA.fftSize = 256;
+  const diagBuf = new Uint8Array(diagA.frequencyBinCount);
+  src.connect(diagA);
+  let diagTicks = 0;
+  const diagTimer = setInterval(() => {
+    diagA.getByteFrequencyData(diagBuf);
+    const avg = diagBuf.reduce((a,b)=>a+b,0)/diagBuf.length;
+    if (diagTicks++ < 5) log('🎵 音频数据: ' + avg.toFixed(1));
+    if (diagTicks === 10) clearInterval(diagTimer);
+  }, 500);
 
   if (isIOS) {
     const gain = state.audioCtx.createGain();
