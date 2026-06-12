@@ -229,6 +229,22 @@ export async function connectLiveKit(roomName) {
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       updateMicUI(true);
       log('🎤 麦克风已开启');
+
+      // 自检: 分析本地麦克风音量
+      if (state.audioCtx) {
+        const selfSrc = state.audioCtx.createMediaStreamSource(state.localStream);
+        const selfA = state.audioCtx.createAnalyser();
+        selfA.fftSize = 256;
+        selfSrc.connect(selfA);
+        const selfBuf = new Uint8Array(selfA.frequencyBinCount);
+        let selfTicks = 0;
+        const selfTimer = setInterval(() => {
+          selfA.getByteFrequencyData(selfBuf);
+          const avg = selfBuf.reduce((a,b)=>a+b,0)/selfBuf.length;
+          if (selfTicks++ < 5) log('🎙️ 本地音量: ' + avg.toFixed(1));
+          if (selfTicks >= 10) clearInterval(selfTimer);
+        }, 500);
+      }
     } catch (e) {
       log('⚠️ 麦克风失败: ' + e.message);
     }
@@ -291,6 +307,8 @@ export async function connectLiveKit(roomName) {
 
       startPositionSync(lkRoom);
       sendProfile(lkRoom);
+      // 头像可能还在异步缩图中，1s后重试
+      setTimeout(() => sendProfile(lkRoom), 1000);
 
       const subInterval = setInterval(() => {
         for (const [pid, p] of state.peers) {
