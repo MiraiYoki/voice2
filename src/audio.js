@@ -317,6 +317,7 @@ export function removePeer(pid) {
     try { if (p.panner) p.panner.disconnect(); } catch (e) {}
     try { if (p.gainNode) p.gainNode.disconnect(); } catch (e) {}
     try { if (p._audioEl) { p._audioEl.srcObject = null; p._audioEl.remove(); } } catch (e) {}
+    try { if (p._testEl) { p._testEl.srcObject = null; p._testEl.remove(); } } catch (e) {}
     try { if (p.pc) p.pc.close(); } catch (e) {}
     state.peers.delete(pid);
   }
