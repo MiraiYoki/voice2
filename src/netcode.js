@@ -27,7 +27,6 @@ export function startPositionSync(room) {
           y: state.myPos.y,
           micOn: state.micOn,
           name: state.profileName,
-          avatar: state.profileAvatar,
         },
       }));
       room.localParticipant.publishData(payload, DataPacket_Kind.LOSSY);

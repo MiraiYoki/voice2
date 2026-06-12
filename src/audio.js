@@ -29,8 +29,10 @@ export async function makeLKToken(identity, room) {
   const key = await crypto.subtle.importKey('raw', enc.encode(LIVEKIT_SECRET),
     { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(h + '.' + p));
-  const s = btoa(String.fromCharCode(...new Uint8Array(sig)))
-    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const arr = new Uint8Array(sig);
+  let bin = '';
+  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+  const s = btoa(bin).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   return h + '.' + p + '.' + s;
 }
 
