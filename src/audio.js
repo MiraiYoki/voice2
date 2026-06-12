@@ -189,12 +189,23 @@ export function updateMicUI(on) {
 }
 
 // ── 5e. 连接LiveKit ──
-export function connectLiveKit(roomName) {
+export async function connectLiveKit(roomName) {
   log('LiveKit连接中...');
   if (!state.audioCtx) {
     state.audioCtx = new AudioContext();
     state.audioCtx.resume();
-    log('AudioContext已创建');
+  }
+
+  // 自动获取麦克风 (不需要手动点)
+  if (!state.localStream) {
+    try {
+      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
+      updateMicUI(true);
+      log('🎤 麦克风已开启');
+    } catch (e) {
+      log('⚠️ 麦克风失败: ' + e.message);
+    }
   }
 
   const lkRoom = new Room();
@@ -204,6 +215,7 @@ export function connectLiveKit(roomName) {
     lkRoom.connect(LIVEKIT_URL, jwt).then(() => {
       log('🔊 已连接');
 
+      // 发布本地音轨
       if (state.localStream) {
         const track = state.localStream.getAudioTracks()[0];
         if (track) {
@@ -211,8 +223,6 @@ export function connectLiveKit(roomName) {
             .then(() => log('📤 已发布'))
             .catch(() => log('⚠️ 发布失败'));
         }
-      } else {
-        log('🔇 未开麦');
       }
 
       lkRoom.on('trackSubscribed', (track, pub, participant) => {
