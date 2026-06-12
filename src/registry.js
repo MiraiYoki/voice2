@@ -42,20 +42,10 @@ export function connectRegistry() {
     } else {
       try {
         const d = JSON.parse(msg.toString());
-        d._createdAt = Date.now();
         state.rooms.set(name, d);
       } catch (e) { /* ignore malformed */ }
     }
     renderRoomList();
-
-    // 30s 过期清理
-    const now = Date.now();
-    for (const [rn, ri] of state.rooms) {
-      if (now - (ri._createdAt || 0) > 30000) {
-        state.rooms.delete(rn);
-        state.regMqtt.publish('voice-registry/' + rn, '', { retain: true });
-      }
-    }
   });
 }
 
