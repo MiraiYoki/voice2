@@ -24,8 +24,6 @@ export function joinRoom(asCreator) {
   // MQTT 注册
   state.regMqtt.publish('voice-registry/' + roomName,
     JSON.stringify({ hasPassword, memberCount: 1 }), { retain: true });
-  state.regMqtt.publish('voice-registry-will/' + roomName,
-    JSON.stringify({ room: roomName, peer: state.myPeerId, t: Date.now() }), { retain: true });
 
   // 隐藏面板，显示游戏UI
   ['home-panel','room-panel','profile-panel','create-panel'].forEach(id => {
@@ -43,12 +41,9 @@ export function joinRoom(asCreator) {
 export function leaveRoom() {
   if (!state.currentRoom) return;
 
-  // 清理遗嘱
-  if (state.regMqtt) {
-    state.regMqtt.publish('voice-registry-will/' + state.currentRoom, '', { retain: true });
-    if (state.isRoomCreator) {
-      state.regMqtt.publish('voice-registry/' + state.currentRoom, '', { retain: true });
-    }
+  // 清理房间
+  if (state.regMqtt && state.isRoomCreator) {
+    state.regMqtt.publish('voice-registry/' + state.currentRoom, '', { retain: true });
   }
 
   // 断开 LiveKit

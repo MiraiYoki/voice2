@@ -17,7 +17,6 @@ export function connectRegistry() {
 
   state.regMqtt.on('connect', () => {
     state.regMqtt.subscribe('voice-registry/#');
-    state.regMqtt.subscribe('voice-registry-will/#');
     toast('MQTT已连接');
   });
 
@@ -25,13 +24,6 @@ export function connectRegistry() {
   state.regMqtt.on('close', () => { toast('MQTT断开'); });
 
   state.regMqtt.on('message', (topic, msg) => {
-    // LWT 遗嘱 → 断线清理
-    if (topic.startsWith('voice-registry-will/')) {
-      state.rooms.delete(topic.replace('voice-registry-will/', ''));
-      renderRoomList();
-      return;
-    }
-
     const name = topic.replace('voice-registry/', '');
     if (!msg.toString()) {
       // 空消息 = 房间销毁
