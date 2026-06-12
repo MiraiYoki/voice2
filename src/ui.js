@@ -81,7 +81,33 @@ export function leaveRoom() {
   toast('已离开房间');
 }
 
-// ── 9c. 所有 UI 事件绑定 ──
+// ── 9c. 头像缩放 ──
+function resizeAndSetAvatar(file) {
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const size = 64;
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const min = Math.min(img.width, img.height);
+    ctx.drawImage(img, (img.width-min)/2, (img.height-min)/2, min, min, 0, 0, size, size);
+    const thumb = c.toDataURL('image/jpeg', 0.7);
+    state.profileAvatar = thumb;
+    localStorage.setItem('voice-profile-avatar', thumb);
+    if (state.avatarImg) state.avatarImg.src = thumb;
+    $('avatar-preview').innerHTML = '<img src="' + thumb + '" style="width:100%;height:100%;object-fit:cover">';
+    $('home-avatar-ring').innerHTML = '<img src="' + thumb + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+    $('self-color').style.backgroundImage = 'url(' + thumb + ')';
+    // 头像换了就发给所有人
+    if (state._lkRoom && state.currentRoom) {
+      import('./netcode.js').then(m => m.sendProfile(state._lkRoom));
+    }
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+// ── 9d. 所有 UI 事件绑定 ──
 export function wireUI() {
   // 首页 → 创建房间
   $('btn-create-room-card').onclick = () => { showPanel('create-panel'); $('create-name').focus(); };
@@ -103,33 +129,9 @@ export function wireUI() {
     showPanel('home-panel');
   };
 
-  // 头像上传 (首页角色面板)
-  $('avatar-upload').onchange = e => {
-    const f = e.target.files[0]; if (!f) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      state.profileAvatar = ev.target.result;
-      localStorage.setItem('voice-profile-avatar', state.profileAvatar);
-      if (state.avatarImg) state.avatarImg.src = state.profileAvatar;
-      $('avatar-preview').innerHTML = '<img src="' + state.profileAvatar + '" style="width:100%;height:100%;object-fit:cover">';
-      $('home-avatar-ring').innerHTML = '<img src="' + state.profileAvatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
-      $('self-color').style.backgroundImage = 'url(' + state.profileAvatar + ')';
-    };
-    reader.readAsDataURL(f);
-  };
-
-  // 头像上传 (游戏中)
-  $('game-avatar-upload').onchange = e => {
-    const f = e.target.files[0]; if (!f) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      state.profileAvatar = ev.target.result;
-      localStorage.setItem('voice-profile-avatar', state.profileAvatar);
-      if (state.avatarImg) state.avatarImg.src = state.profileAvatar;
-      $('self-color').style.backgroundImage = 'url(' + state.profileAvatar + ')';
-    };
-    reader.readAsDataURL(f);
-  };
+  // 头像上传 (缩到 64x64，保证 DataChannel 能传输)
+  $('avatar-upload').onchange = e => { resizeAndSetAvatar(e.target.files[0]); };
+  $('game-avatar-upload').onchange = e => { resizeAndSetAvatar(e.target.files[0]); };
 
   // 游戏中按钮
   $('btn-mic').onclick = toggleMic;

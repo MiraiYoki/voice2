@@ -177,7 +177,8 @@ export async function toggleMic() {
       state.localStream = null;
       updateMicUI(false);
     } else {
-      if (state.audioCtx) { try { await state.audioCtx.close(); } catch (e) {} state.audioCtx = null; }
+      // 开麦: 确保 AudioContext 存在
+      if (!state.audioCtx) { state.audioCtx = new AudioContext(); state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
@@ -202,6 +203,12 @@ export function updateMicUI(on) {
 
 // ── 5e. 连接LiveKit (含 DataChannel — R2拆到 netcode.js) ──
 export function connectLiveKit(roomName) {
+  // 确保 AudioContext 存在 (收听者也需要)
+  if (!state.audioCtx) {
+    state.audioCtx = new AudioContext();
+    state.audioCtx.resume();
+  }
+
   const lkRoom = new Room();
   state._lkRoom = lkRoom;
 
