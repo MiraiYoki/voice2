@@ -3,10 +3,9 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: './',
   build: {
-    outDir: '.',
+    outDir: 'docs',
     assetsDir: 'assets',
     sourcemap: false,
-    emptyOutDir: false,
   },
   server: {
     open: true,
