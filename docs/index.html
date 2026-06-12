@@ -19,16 +19,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC"
   -webkit-font-smoothing:antialiased;overflow:hidden;}
 .app{width:100%;max-width:520px;height:100%;display:flex;flex-direction:column;padding:6px 12px;gap:6px;}
 
-/* Header */
 .header{text-align:center;padding:4px 0 0;flex-shrink:0;}
 .header h1{font-size:16px;font-weight:640;letter-spacing:-0.025em;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;}
 
-/* Map */
 .map-wrap{flex:1 1 0;min-height:0;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;position:relative;display:none;}
 .map-wrap canvas{display:block;width:100%;height:100%;cursor:grab;}
 .map-wrap canvas:active{cursor:grabbing;}
 
-/* Game Bar */
 .game-bar{flex-shrink:0;align-items:center;gap:8px;padding:2px 0;display:none;}
 .joystick{width:100px;height:100px;border-radius:50%;flex-shrink:0;background:rgba(25,20,45,0.95);border:3px solid rgba(155,77,255,0.65);touch-action:none;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:center;position:relative;}
 .joystick::before,.joystick::after{content:'';position:absolute;background:rgba(155,77,255,0.3);}
@@ -38,7 +35,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC"
 .joystick.active{border-color:var(--accent);box-shadow:0 0 20px rgba(155,77,255,0.2);}
 .joystick.active .stick{background:var(--accent);}
 
-/* Panels */
 .panel{flex:1;overflow-y:auto;padding:4px;}
 .panel::-webkit-scrollbar{width:0;}
 .home-panel{flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 8px;}
@@ -50,7 +46,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC"
 .home-card-title{font-size:18px;font-weight:650;margin-bottom:4px;}
 .home-card-desc{font-size:13px;color:var(--text2);}
 
-/* Room cards */
 .room-card{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:transform .15s;}
 .room-card:hover{border-color:var(--accent);transform:translateY(-1px);}
 .room-card .room-icon{font-size:22px;flex-shrink:0;}
@@ -60,7 +55,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC"
 .room-card .room-count{font-size:12px;color:var(--accent);font-weight:640;background:var(--accent-dim);padding:4px 10px;border-radius:12px;white-space:nowrap;}
 .room-empty{text-align:center;color:var(--text2);padding:40px 24px;font-size:13px;}
 
-/* Inputs & Buttons */
 input{font-family:inherit;}
 .btn{padding:8px 18px;border-radius:var(--radius-sm);border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;transition:transform .12s;}
 .btn:active{transform:scale(.96);}
@@ -68,7 +62,6 @@ input{font-family:inherit;}
 .back-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;}
 .back-btn:hover{border-color:var(--accent);}
 
-/* Status bar */
 .room-badge{display:inline-flex;align-items:center;gap:5px;background:var(--accent-dim);color:var(--accent);padding:3px 11px;border-radius:20px;font-size:11px;font-weight:540;}
 .room-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse-dot 2s ease-in-out infinite;}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
@@ -83,7 +76,6 @@ input{font-family:inherit;}
     <div style="font-size:10px;color:var(--accent)"><span id="status">输入房间名加入</span></div>
   </div>
 
-  <!-- Home Panel -->
   <div class="home-panel" id="home-panel">
     <div class="home-cards">
       <div class="home-card" id="btn-create-room-card">
@@ -101,7 +93,6 @@ input{font-family:inherit;}
     </div>
   </div>
 
-  <!-- Create Room Panel -->
   <div class="panel" id="create-panel" style="display:none">
     <button class="back-btn" id="create-back">← 返回</button>
     <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
@@ -111,7 +102,6 @@ input{font-family:inherit;}
     </div>
   </div>
 
-  <!-- Room List Panel -->
   <div class="panel" id="room-panel" style="display:none">
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <button class="back-btn" id="room-back">← 返回</button>
@@ -121,7 +111,6 @@ input{font-family:inherit;}
     <div id="room-list"></div>
   </div>
 
-  <!-- Profile Panel -->
   <div class="panel" id="profile-panel" style="display:none">
     <button class="back-btn" id="profile-back">← 返回</button>
     <div style="text-align:center;padding:16px 0;margin-top:8px">
@@ -133,12 +122,10 @@ input{font-family:inherit;}
     </div>
   </div>
 
-  <!-- Map -->
   <div class="map-wrap" id="map-wrap">
     <canvas id="map-canvas"></canvas>
   </div>
 
-  <!-- Game Bar -->
   <div class="game-bar" id="game-bar">
     <div class="joystick" id="joystick"><div class="stick" id="joystick-stick"></div></div>
     <div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 14px">
