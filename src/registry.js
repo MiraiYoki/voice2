@@ -18,7 +18,11 @@ export function connectRegistry() {
   state.regMqtt.on('connect', () => {
     state.regMqtt.subscribe('voice-registry/#');
     state.regMqtt.subscribe('voice-registry-will/#');
+    toast('MQTT已连接');
   });
+
+  state.regMqtt.on('error', (e) => { toast('MQTT错误: ' + e.message); });
+  state.regMqtt.on('close', () => { toast('MQTT断开'); });
 
   state.regMqtt.on('message', (topic, msg) => {
     // LWT 遗嘱 → 断线清理
@@ -43,6 +47,7 @@ export function connectRegistry() {
       try {
         const d = JSON.parse(msg.toString());
         state.rooms.set(name, d);
+        toast('发现房间: ' + name);
       } catch (e) { /* ignore malformed */ }
     }
     renderRoomList();
