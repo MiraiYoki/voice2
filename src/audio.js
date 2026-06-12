@@ -229,13 +229,14 @@ export async function connectLiveKit(roomName) {
       log('🔊 已连接');
 
       // 发布本地音轨
-      if (state.localStream) {
-        const track = state.localStream.getAudioTracks()[0];
-        if (track) {
-          lkRoom.localParticipant.publishTrack(track, { name: 'mic' })
-            .then(() => log('📤 已发布'))
-            .catch(() => log('⚠️ 发布失败'));
-        }
+      const tracks = state.localStream ? state.localStream.getAudioTracks() : [];
+      log('本地音轨: ' + tracks.length + ' 条');
+      if (tracks.length > 0 && tracks[0].readyState === 'live') {
+        lkRoom.localParticipant.publishTrack(tracks[0], { name: 'mic' })
+          .then(() => log('📤 已发布'))
+          .catch(e => log('⚠️ 发布失败: ' + e.message));
+      } else {
+        log('⚠️ 无可用音轨');
       }
 
       lkRoom.on('trackSubscribed', (track, pub, participant) => {
