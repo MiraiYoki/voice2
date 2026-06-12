@@ -57,6 +57,12 @@ const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
 export function setupAudioNodes(pid, remoteStream) {
   if (!state.audioCtx) { log('无AudioContext'); return; }
+  // 强制恢复 AudioContext (某些浏览器需要)
+  if (state.audioCtx.state === 'suspended') {
+    state.audioCtx.resume();
+    log('AudioContext恢复中...(' + state.audioCtx.state + ')');
+  }
+
   let info = state.peers.get(pid);
   if (!info) {
     info = { x: ROOM_SIZE / 2, y: ROOM_SIZE / 2 };
@@ -64,7 +70,11 @@ export function setupAudioNodes(pid, remoteStream) {
   }
   if (info.stream) return;
   info.stream = remoteStream;
-  log('🎧 设置音频: ' + pid.slice(0,8));
+  log('🎧 音频节点: ' + pid.slice(0,8) + ' ctx=' + state.audioCtx.state);
+
+  // 检查远端音轨状态
+  const audioTracks = remoteStream.getAudioTracks();
+  log('音轨数: ' + audioTracks.length + ' 启用: ' + (audioTracks[0]?.enabled || false));
 
   // <audio muted> dual-track — spatial-audio 同款
   const audioEl = document.createElement('audio');
@@ -193,7 +203,10 @@ export async function connectLiveKit(roomName) {
   log('LiveKit连接中...');
   if (!state.audioCtx) {
     state.audioCtx = new AudioContext();
-    state.audioCtx.resume();
+  }
+  if (state.audioCtx.state === 'suspended') {
+    await state.audioCtx.resume();
+    log('AudioContext: ' + state.audioCtx.state);
   }
 
   // 自动获取麦克风 (不需要手动点)
