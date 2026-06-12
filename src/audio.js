@@ -17,23 +17,30 @@ import {
 
 // ── 5a. JWT生成 (浏览器WebCrypto) ──
 export async function makeLKToken(identity, room) {
-  const hdr = { alg: 'HS256', typ: 'JWT' };
-  const now = Math.floor(Date.now() / 1000);
-  const pld = {
-    iss: LIVEKIT_KEY, sub: identity, nbf: now, exp: now + 86400,
-    video: { room, roomJoin: true, canPublish: true, canSubscribe: true },
-  };
-  const enc = new TextEncoder();
-  const h = btoa(JSON.stringify(hdr)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  const p = btoa(JSON.stringify(pld)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  const key = await crypto.subtle.importKey('raw', enc.encode(LIVEKIT_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(h + '.' + p));
-  const arr = new Uint8Array(sig);
-  let bin = '';
-  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
-  const s = btoa(bin).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  return h + '.' + p + '.' + s;
+  try {
+    const hdr = { alg: 'HS256', typ: 'JWT' };
+    const now = Math.floor(Date.now() / 1000);
+    const pld = {
+      iss: LIVEKIT_KEY, sub: identity, nbf: now, exp: now + 86400,
+      video: { room, roomJoin: true, canPublish: true, canSubscribe: true },
+    };
+    const enc = new TextEncoder();
+    const h = btoa(JSON.stringify(hdr)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const p = btoa(JSON.stringify(pld)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const keyData = enc.encode(LIVEKIT_SECRET);
+    const key = await crypto.subtle.importKey('raw', keyData,
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(h + '.' + p));
+    const arr = new Uint8Array(sig);
+    let bin = '';
+    for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+    const s = btoa(bin).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    return h + '.' + p + '.' + s;
+  } catch (e) {
+    console.error('makeLKToken failed:', e.message, e.name);
+    toast('Token生成失败: ' + e.message);
+    throw e;
+  }
 }
 
 // ── 5b. 空间音频管线 (对标 spatial-audio PublicationRenderer) ──
