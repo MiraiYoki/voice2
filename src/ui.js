@@ -3,7 +3,7 @@
 // ╚══════════════════════════════════════════╝
 
 import { state } from './state.js';
-import { $, toast, simpleHash, showPanel } from './utils.js';
+import { $, toast, simpleHash, showPanel, renderAllLogs } from './utils.js';
 import { ROOM_SIZE } from './config.js';
 import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking } from './audio.js';
 import { stopPositionSync } from './netcode.js';
@@ -136,6 +136,10 @@ export function wireUI() {
   // 游戏中按钮
   $('btn-mic').onclick = toggleMic;
   $('btn-leave').onclick = leaveRoom;
+  $('btn-debug').onclick = toggleDebugPanel;
+
+  // 调试面板内部按钮
+  wireDebugPanel();
 
   // 全局
   window.addEventListener('resize', () => {
@@ -143,4 +147,44 @@ export function wireUI() {
     import('./renderer.js').then(m => { m.resizeCanvas(); m.drawMap(); });
   });
   window.addEventListener('beforeunload', () => { if (state.currentRoom) leaveRoom(); });
+}
+
+// ── 9e. 调试面板 ──
+function toggleDebugPanel() {
+  const panel = $('debug-panel');
+  if (!panel) return;
+  const isOpen = panel.style.display === 'flex';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen) {
+    renderAllLogs('all');
+    // 高亮"全部"按钮
+    $('debug-filter-all').style.background = 'var(--accent)';
+  }
+}
+
+function wireDebugPanel() {
+  const btns = {
+    'debug-filter-all': 'all',
+    'debug-filter-conn': 'conn',
+    'debug-filter-audio': 'audio',
+    'debug-filter-pos': 'pos',
+    'debug-filter-avatar': 'avatar',
+  };
+  for (const [id, cat] of Object.entries(btns)) {
+    const btn = $(id);
+    if (!btn) continue;
+    btn.onclick = () => {
+      // 重置所有按钮样式
+      Object.keys(btns).forEach(bid => {
+        const b = $(bid);
+        if (b) b.style.background = 'var(--card)';
+      });
+      btn.style.background = 'var(--accent)';
+      renderAllLogs(cat);
+    };
+  }
+  $('debug-close').onclick = () => {
+    const panel = $('debug-panel');
+    if (panel) panel.style.display = 'none';
+  };
 }

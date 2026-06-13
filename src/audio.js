@@ -1,12 +1,11 @@
 // ╔══════════════════════════════════════════╗
 // ║  5. AudioController (LiveKit + 空间音频)   ║
 // ╚══════════════════════════════════════════╝
-// 对标 spatial-audio SpatialAudioController + NetcodeController
-// 修复: 坐标系(像素直传) + iOS降级 + selective sub + 防爆音
+// v2.3.2 — 修复4个音频bug + 接入统一调试日志
 
 import { Room, LocalAudioTrack } from 'livekit-client';
 import { state } from './state.js';
-import { $, toast } from './utils.js';
+import { $, toast, addLog, statusLog } from './utils.js';
 import { updateRoomCount } from './registry.js';
 import { startPositionSync, sendProfile } from './netcode.js';
 import {
@@ -14,9 +13,6 @@ import {
   ROOM_SIZE, COLORS,
   PANNER_REF_DISTANCE, PANNER_MAX_DISTANCE, PANNER_ROLLOFF_FACTOR, EARSHOT_RADIUS,
 } from './config.js';
-
-// 调试: 写到顶部状态栏, 比 toast 可靠
-function log(msg) { const s = $('status'); if (s) s.textContent = msg; console.log(msg); }
 
 // ── 5a. JWT生成 (浏览器WebCrypto) ──
 function b64u(str) {
@@ -47,20 +43,29 @@ export async function makeLKToken(identity, room) {
     const s = btoa(bin).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
     return h + '.' + p + '.' + s;
   } catch (e) {
-    log('Token失败: ' + e.message);
+    addLog('err', 'Token生成失败: ' + e.message);
     throw e;
   }
 }
 
-// ── 5b. 空间音频管线 (对标 spatial-audio PublicationRenderer) ──
+// ── 5b. 空间音频管线 ──
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 
-export function setupAudioNodes(pid, remoteStream) {
-  if (!state.audioCtx) { log('无AudioContext'); return; }
-  // 强制恢复 AudioContext (某些浏览器需要)
+export async function setupAudioNodes(pid, remoteStream) {
+  if (!state.audioCtx) {
+    addLog('err', 'setupAudioNodes: 无AudioContext');
+    return;
+  }
+
+  // BUGFIX 1: await resume() — 之前没等异步完成就继续了
   if (state.audioCtx.state === 'suspended') {
-    state.audioCtx.resume();
-    log('AudioContext恢复中...(' + state.audioCtx.state + ')');
+    try {
+      await state.audioCtx.resume();
+      addLog('audio', 'AudioContext已恢复 → ' + state.audioCtx.state);
+    } catch (e) {
+      addLog('err', 'AudioContext恢复失败: ' + e.message);
+      return;
+    }
   }
 
   let info = state.peers.get(pid);
@@ -68,24 +73,55 @@ export function setupAudioNodes(pid, remoteStream) {
     info = { x: ROOM_SIZE / 2, y: ROOM_SIZE / 2 };
     state.peers.set(pid, info);
   }
-  if (info.stream) return;
+
+  // BUGFIX 2: 重连时清理旧音频管线再重建，而不是直接 return
+  if (info.stream) {
+    addLog('audio', pid.slice(0,8) + ' 重连，清理旧音频节点');
+    try { if (info.source) info.source.disconnect(); } catch (e) {}
+    try { if (info.panner) info.panner.disconnect(); } catch (e) {}
+    try { if (info.gainNode) info.gainNode.disconnect(); } catch (e) {}
+    try { if (info._audioEl) { info._audioEl.srcObject = null; info._audioEl.remove(); } } catch (e) {}
+    info.stream = null;
+    info.source = null;
+    info.panner = null;
+    info.gainNode = null;
+    info._audioEl = null;
+  }
+
   info.stream = remoteStream;
-  log('🎧 音频节点: ' + pid.slice(0,8) + ' ctx=' + state.audioCtx.state);
+  addLog('audio', '🎧 设置音频节点: ' + pid.slice(0,8) + ' ctx=' + state.audioCtx.state);
 
   // 检查远端音轨状态
   const audioTracks = remoteStream.getAudioTracks();
-  log('音轨数: ' + audioTracks.length + ' 启用: ' + (audioTracks[0]?.enabled || false));
+  addLog('audio', '音轨数: ' + audioTracks.length + ' 启用: ' + (audioTracks[0]?.enabled ?? '?'));
 
-  // <audio muted> dual-track — spatial-audio 同款
+  // BUGFIX 4: play 失败后绑定用户手势重试
   const audioEl = document.createElement('audio');
   audioEl.muted = true;
   audioEl.srcObject = remoteStream;
-  audioEl.play().catch(e => log('🎧 play失败: ' + e.message));
+  let playOk = false;
+  try {
+    await audioEl.play();
+    playOk = true;
+  } catch (e) {
+    addLog('audio', '⚠️ play被拒: ' + e.message + ' — 等待用户交互');
+  }
+  if (!playOk) {
+    // 绑定一次性重试：任意点击/触摸后恢复播放
+    const retry = async () => {
+      try { await audioEl.play(); addLog('audio', '🎧 play重试成功'); }
+      catch (e2) { addLog('err', '🎧 play重试仍失败: ' + e2.message); }
+    };
+    ['click','touchstart','keydown'].forEach(evt =>
+      document.addEventListener(evt, retry, { once: true }));
+    // 同时立即重试一次（如果 AudioContext resume 已经解开了 autoplay 锁）
+    setTimeout(retry, 500);
+  }
   info._audioEl = audioEl;
 
   const src = state.audioCtx.createMediaStreamSource(remoteStream);
 
-  // 在 source 之后直接插入 AnalyserNode 诊断是否有音频数据
+  // AnalyserNode 诊断
   const diagA = state.audioCtx.createAnalyser();
   diagA.fftSize = 256;
   const diagBuf = new Uint8Array(diagA.frequencyBinCount);
@@ -94,7 +130,7 @@ export function setupAudioNodes(pid, remoteStream) {
   const diagTimer = setInterval(() => {
     diagA.getByteFrequencyData(diagBuf);
     const avg = diagBuf.reduce((a,b)=>a+b,0)/diagBuf.length;
-    if (diagTicks++ < 5) log('🎵 音频数据: ' + avg.toFixed(1));
+    if (diagTicks++ < 5) addLog('audio', '🎵 远端音量[' + pid.slice(0,6) + ']: ' + avg.toFixed(1));
     if (diagTicks === 10) clearInterval(diagTimer);
   }, 500);
 
@@ -104,6 +140,7 @@ export function setupAudioNodes(pid, remoteStream) {
     src.connect(gain).connect(state.audioCtx.destination);
     info.gainNode = gain;
     info._isIOS = true;
+    addLog('audio', 'iOS模式: 距离衰减 (无HRTF)');
   } else {
     const panner = state.audioCtx.createPanner();
     const gain = state.audioCtx.createGain();
@@ -147,6 +184,8 @@ export function setupAudioNodes(pid, remoteStream) {
       info.smoothedVol = info.smoothedVol * 0.6 + avg * 0.4;
       requestAnimationFrame(tick);
     })();
+
+    addLog('audio', '桌面端HRTF管线完成: ' + pid.slice(0,8));
   }
 
   updateSpatialAudio();
@@ -187,16 +226,19 @@ export async function toggleMic() {
       state.localStream.getAudioTracks().forEach(t => t.stop());
       state.localStream = null;
       updateMicUI(false);
+      addLog('audio', '🔇 麦克风已关闭');
     } else {
-      if (!state.audioCtx) { state.audioCtx = new AudioContext(); state.audioCtx.resume(); }
+      if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
-      if (!state.audioCtx) { state.audioCtx = new AudioContext(); state.audioCtx.resume(); }
+      if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       updateMicUI(true);
+      addLog('audio', '🎤 麦克风已开启');
     }
   } catch (e) {
     toast('麦克风切换失败');
+    addLog('err', '麦克风切换失败: ' + e.message);
   } finally {
     state.micBusy = false;
   }
@@ -213,24 +255,27 @@ export function updateMicUI(on) {
 
 // ── 5e. 连接LiveKit ──
 export async function connectLiveKit(roomName) {
-  log('LiveKit连接中...');
+  statusLog('LiveKit连接中...');
+  addLog('conn', '开始连接 LiveKit, room=' + roomName + ' peer=' + (state.myPeerId || '?').slice(0,8));
+
   if (!state.audioCtx) {
     state.audioCtx = new AudioContext();
+    addLog('audio', 'AudioContext 已创建, state=' + state.audioCtx.state);
   }
   if (state.audioCtx.state === 'suspended') {
     await state.audioCtx.resume();
-    log('AudioContext: ' + state.audioCtx.state);
+    addLog('audio', 'AudioContext 已恢复, state=' + state.audioCtx.state);
   }
 
-  // 自动获取麦克风 (不需要手动点)
+  // 自动获取麦克风
   if (!state.localStream) {
     try {
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       updateMicUI(true);
-      log('🎤 麦克风已开启');
+      addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
 
-      // 自检: 分析本地麦克风音量
+      // 自检本地麦克风音量
       if (state.audioCtx) {
         const selfSrc = state.audioCtx.createMediaStreamSource(state.localStream);
         const selfA = state.audioCtx.createAnalyser();
@@ -241,99 +286,120 @@ export async function connectLiveKit(roomName) {
         const selfTimer = setInterval(() => {
           selfA.getByteFrequencyData(selfBuf);
           const avg = selfBuf.reduce((a,b)=>a+b,0)/selfBuf.length;
-          if (selfTicks++ < 5) log('🎙️ 本地音量: ' + avg.toFixed(1));
+          if (selfTicks++ < 5) addLog('audio', '🎙️ 本地音量#' + selfTicks + ': ' + avg.toFixed(1));
           if (selfTicks >= 10) clearInterval(selfTimer);
         }, 500);
       }
     } catch (e) {
-      log('⚠️ 麦克风失败: ' + e.message);
+      addLog('err', '⚠️ 麦克风获取失败: ' + e.message);
+      statusLog('麦克风失败: ' + e.message);
     }
   }
 
   const lkRoom = new Room();
   state._lkRoom = lkRoom;
 
-  makeLKToken(state.myPeerId, roomName).then(jwt => {
-    lkRoom.connect(LIVEKIT_URL, jwt).then(() => {
-      log('🔊 已连接');
+  try {
+    const jwt = await makeLKToken(state.myPeerId, roomName);
+    addLog('conn', 'JWT已生成');
+    await lkRoom.connect(LIVEKIT_URL, jwt);
+    addLog('conn', '🔊 LiveKit 已连接');
+    statusLog('LiveKit已连接');
 
-      // 发布本地音轨
-      const tracks = state.localStream ? state.localStream.getAudioTracks() : [];
-      log('本地音轨: ' + tracks.length + ' 条');
-      if (tracks.length > 0 && tracks[0].readyState === 'live') {
-        const audioTrack = new LocalAudioTrack(tracks[0]);
-        lkRoom.localParticipant.publishTrack(audioTrack, { name: 'mic' })
-          .then(() => log('📤 已发布'))
-          .catch(e => log('⚠️ 发布失败: ' + e.message));
-      } else {
-        log('⚠️ 无可用音轨');
+    // 发布本地音轨
+    const tracks = state.localStream ? state.localStream.getAudioTracks() : [];
+    addLog('conn', '本地音轨数: ' + tracks.length + ' readyState=' + (tracks[0]?.readyState || '?'));
+    if (tracks.length > 0 && tracks[0].readyState === 'live') {
+      const audioTrack = new LocalAudioTrack(tracks[0]);
+      try {
+        await lkRoom.localParticipant.publishTrack(audioTrack, { name: 'mic' });
+        addLog('conn', '📤 本地音轨已发布');
+      } catch (e) {
+        addLog('err', '⚠️ 发布本地音轨失败: ' + e.message);
       }
+    } else {
+      addLog('err', '⚠️ 无可用本地音轨 (readyState=' + (tracks[0]?.readyState || 'none') + ')');
+    }
 
-      lkRoom.on('trackSubscribed', (track, pub, participant) => {
-        log('🎵 音轨: ' + (participant.name || participant.identity).slice(0,8)
-          + ' state=' + (track.mediaStreamTrack?.readyState || '?'));
-        if (track.kind !== 'audio') return;
-        const pid = participant.identity;
-        const remoteStream = new MediaStream([track.mediaStreamTrack]);
-        if (!state.peers.has(pid)) {
-          state.peers.set(pid, {
-            x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
-            name: participant.name || pid.slice(-6),
-            micOn: true, isSpeaking: false,
-            color: COLORS[state.peers.size % COLORS.length],
-            _snaps: [{ x: ROOM_SIZE / 2, y: ROOM_SIZE / 2, t: Date.now() }],
-          });
-        }
-        const info = state.peers.get(pid);
-        info._pub = pub;
-        setupAudioNodes(pid, remoteStream);
-      });
-
-      lkRoom.on('participantDisconnected', p => {
-        const pid = p.identity;
-        if (state.peers.has(pid)) { removePeer(pid); updateRoomCount(); }
-      });
-
-      lkRoom.on('participantConnected', p => {
-        const pid = p.identity;
-        if (pid === state.myPeerId || state.peers.has(pid)) return;
+    lkRoom.on('trackSubscribed', (track, pub, participant) => {
+      const pname = (participant.name || participant.identity).slice(0,8);
+      addLog('conn', '🎵 远端音轨: ' + pname
+        + ' kind=' + track.kind
+        + ' readyState=' + (track.mediaStreamTrack?.readyState || '?'));
+      if (track.kind !== 'audio') return;
+      const pid = participant.identity;
+      const remoteStream = new MediaStream([track.mediaStreamTrack]);
+      if (!state.peers.has(pid)) {
         state.peers.set(pid, {
           x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
-          name: p.name || pid.slice(-6),
+          name: participant.name || pid.slice(-6),
           micOn: true, isSpeaking: false,
           color: COLORS[state.peers.size % COLORS.length],
           _snaps: [{ x: ROOM_SIZE / 2, y: ROOM_SIZE / 2, t: Date.now() }],
         });
-        updateRoomCount();
-      });
+        addLog('conn', '新建 peer: ' + pid.slice(0,8));
+      }
 
-      startPositionSync(lkRoom);
-      sendProfile(lkRoom);
-      // 头像可能还在异步缩图中，1s后重试
-      setTimeout(() => sendProfile(lkRoom), 1000);
-
-      const subInterval = setInterval(() => {
-        for (const [pid, p] of state.peers) {
-          if (!p._pub) continue;
-          const dist = Math.sqrt((p.x - state.myPos.x) ** 2 + (p.y - state.myPos.y) ** 2);
-          const hearable = dist <= EARSHOT_RADIUS;
-          try { p._pub.setSubscribed(hearable); } catch (e) {}
-        }
-      }, 500);
-      state._dcIntervals.push(subInterval);
-
-      startDucking();
-
-      $('game-bar').style.display = 'flex';
-      $('map-wrap').style.display = 'block';
-      import('./renderer.js').then(m => { m.resizeCanvas(); m.drawMap(); });
-
-    }).catch(e => {
-      log('⚠️ 连接失败: ' + e.message);
+      // BUGFIX 3: try-catch 保护，防止单个 peer 失败阻断后续
+      const info = state.peers.get(pid);
+      info._pub = pub;
+      try {
+        setupAudioNodes(pid, remoteStream);
+      } catch (e) {
+        addLog('err', '❌ setupAudioNodes 异常 [' + pid.slice(0,8) + ']: ' + e.message);
+      }
     });
-  }).catch(e => {
-    log('Token失败: ' + e.message);
-  });
+
+    lkRoom.on('participantDisconnected', p => {
+      const pid = p.identity;
+      addLog('conn', '👋 peer离开: ' + pid.slice(0,8));
+      if (state.peers.has(pid)) { removePeer(pid); updateRoomCount(); }
+    });
+
+    lkRoom.on('participantConnected', p => {
+      const pid = p.identity;
+      if (pid === state.myPeerId || state.peers.has(pid)) return;
+      addLog('conn', '👤 peer加入: ' + (p.name || pid).slice(0,8));
+      state.peers.set(pid, {
+        x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
+        name: p.name || pid.slice(-6),
+        micOn: true, isSpeaking: false,
+        color: COLORS[state.peers.size % COLORS.length],
+        _snaps: [{ x: ROOM_SIZE / 2, y: ROOM_SIZE / 2, t: Date.now() }],
+      });
+      updateRoomCount();
+    });
+
+    startPositionSync(lkRoom);
+    addLog('pos', '位置同步已启动');
+
+    sendProfile(lkRoom);
+    addLog('avatar', '头像已发送 (首次)');
+    setTimeout(() => {
+      sendProfile(lkRoom);
+      addLog('avatar', '头像已发送 (1s重试)');
+    }, 1000);
+
+    const subInterval = setInterval(() => {
+      for (const [pid, p] of state.peers) {
+        if (!p._pub) continue;
+        const dist = Math.sqrt((p.x - state.myPos.x) ** 2 + (p.y - state.myPos.y) ** 2);
+        const hearable = dist <= EARSHOT_RADIUS;
+        try { p._pub.setSubscribed(hearable); } catch (e) {}
+      }
+    }, 500);
+    state._dcIntervals.push(subInterval);
+
+    startDucking();
+
+    $('game-bar').style.display = 'flex';
+    $('map-wrap').style.display = 'block';
+    import('./renderer.js').then(m => { m.resizeCanvas(); m.drawMap(); });
+
+  } catch (e) {
+    addLog('err', '❌ LiveKit连接失败: ' + e.message);
+    statusLog('连接失败: ' + e.message);
+  }
 }
 
 // ── 5f. peer清理 ──
@@ -347,6 +413,7 @@ export function removePeer(pid) {
     try { if (p._testEl) { p._testEl.srcObject = null; p._testEl.remove(); } } catch (e) {}
     try { if (p.pc) p.pc.close(); } catch (e) {}
     state.peers.delete(pid);
+    addLog('audio', '已清理 peer: ' + pid.slice(0,8));
   }
   updateRoomCount();
 }

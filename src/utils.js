@@ -1,6 +1,8 @@
 // ╔══════════════════════════════════════════╗
-// ║  3. UTILS — 纯工具函数 + DOM 辅助         ║
+// ║  3. UTILS — 纯工具函数 + DOM 辅助 + 调试日志 ║
 // ╚══════════════════════════════════════════╝
+
+import { state } from './state.js';
 
 // DOM 快捷查询
 export const $ = (id) => document.getElementById(id);
@@ -21,6 +23,68 @@ export function toast(msg) {
     t.style.transition = 'opacity .3s';
     setTimeout(() => t.remove(), 300);
   }, 2000);
+}
+
+// ── 调试日志系统 ──
+const MAX_LOGS = 600;
+
+export function addLog(cat, msg) {
+  if (!state._logs) state._logs = [];
+  const entry = { t: Date.now(), cat, msg };
+  state._logs.push(entry);
+  if (state._logs.length > MAX_LOGS) state._logs.splice(0, state._logs.length - MAX_LOGS);
+  // 实时更新调试面板
+  const panel = $('debug-list');
+  if (panel && panel.style.display !== 'none') {
+    appendLogDOM(entry);
+  }
+  console.log('[' + cat + ']', msg);
+}
+
+// 同时写 status bar + 日志
+export function statusLog(msg) {
+  const s = $('status');
+  if (s) s.textContent = msg;
+  console.log(msg);
+  addLog('sys', msg);
+}
+
+function appendLogDOM(entry) {
+  const panel = $('debug-list');
+  if (!panel) return;
+  const time = new Date(entry.t).toLocaleTimeString('zh-CN', { hour12: false });
+  const tagColors = {
+    conn: '#0891b2', audio: '#7c3aed', pos: '#16a34a',
+    avatar: '#ea580c', sys: '#726d87', err: '#e04949',
+  };
+  const tagLabels = {
+    conn: '连接', audio: '音频', pos: '位置',
+    avatar: '头像', sys: '系统', err: '错误',
+  };
+  const c = tagColors[entry.cat] || '#726d87';
+  const l = tagLabels[entry.cat] || entry.cat;
+  const div = document.createElement('div');
+  div.className = 'debug-line';
+  div.style.cssText = 'padding:2px 0;font-size:11px;font-family:SF Mono,monospace;line-height:1.5';
+  div.innerHTML = '<span style="color:#726d87">' + time + '</span> '
+    + '<span style="display:inline-block;background:' + c + '22;color:' + c
+    + ';padding:1px 5px;border-radius:3px;font-size:10px;margin-right:4px">' + l + '</span>'
+    + '<span style="color:#e8e4f2">' + entry.msg + '</span>';
+  panel.appendChild(div);
+  // 自动滚到底部
+  const wrap = $('debug-wrap');
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
+}
+
+export function renderAllLogs(filter) {
+  const panel = $('debug-list');
+  if (!panel) return;
+  panel.innerHTML = '';
+  const logs = state._logs || [];
+  const filtered = filter === 'all' ? logs : logs.filter(e => e.cat === filter);
+  for (const e of filtered) appendLogDOM(e);
+  const wrap = $('debug-wrap');
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
 }
 
 // 字符串哈希 → 用作 peerId

@@ -54,12 +54,22 @@ input:focus{border-color:var(--accent);}
 .room-badge{display:inline-flex;align-items:center;gap:5px;background:var(--accent-dim);color:var(--accent);padding:3px 11px;border-radius:20px;font-size:11px;font-weight:540;}
 .room-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse-dot 2s ease-in-out infinite;}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+/* 调试面板 */
+.debug-panel{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(10,8,22,0.94);z-index:200;flex-direction:column;padding:12px;}
+.debug-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:8px;}
+.debug-header h2{font-size:14px;font-weight:640;}
+.debug-filters{display:flex;gap:6px;flex-shrink:0;margin-bottom:8px;flex-wrap:wrap;}
+.debug-filters button{padding:4px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;}
+.debug-wrap{flex:1;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:var(--radius-sm);padding:8px;}
+.debug-wrap::-webkit-scrollbar{width:4px;}
+.debug-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.debug-empty{text-align:center;color:var(--text2);font-size:12px;padding:24px;}
 </style>
-  <script type="module" crossorigin src="./assets/index-DnLUJbQG.js"></script>
+  <script type="module" crossorigin src="./assets/index-B3uCqtje.js"></script>
 </head>
 <body>
 <div class="app">
-  <div class="header"><h1 id="room-title">空间语音聊天室 <span style="font-size:10px;color:var(--text2);font-weight:400">v2.2.9</span></h1><div style="font-size:10px;color:var(--accent)"><span id="status">输入房间名加入</span></div></div>
+  <div class="header"><h1 id="room-title">空间语音聊天室 <span style="font-size:10px;color:var(--text2);font-weight:400">v2.3.2</span></h1><div style="font-size:10px;color:var(--accent)"><span id="status">输入房间名加入</span></div></div>
   <div class="home-panel" id="home-panel"><div class="home-cards">
     <div class="home-card" id="btn-create-room-card"><div class="home-card-ring"><i>＋</i></div><div class="home-card-body"><div class="home-card-title">创建房间</div><div class="home-card-desc">设置名称与密码</div></div></div>
     <div class="home-card" id="btn-find-rooms"><div class="home-card-ring"><i>🔍</i></div><div class="home-card-body"><div class="home-card-title">查找房间</div><div class="home-card-desc">浏览或搜索已有房间</div></div></div>
@@ -69,7 +79,19 @@ input:focus{border-color:var(--accent);}
   <div class="panel" id="room-panel" style="display:none"><div style="display:flex;gap:8px;margin-bottom:8px"><button class="back-btn" id="room-back">← 返回</button><input id="room-search" placeholder="搜索房间..."></div><div class="room-empty" id="room-empty">加载中...</div><div id="room-list"></div></div>
   <div class="panel" id="profile-panel" style="display:none"><button class="back-btn" id="profile-back">← 返回</button><div style="text-align:center;padding:16px 0;margin-top:8px"><label for="avatar-upload" style="cursor:pointer"><div id="avatar-preview" style="width:80px;height:80px;border-radius:50%;background:var(--card);border:2px dashed var(--border);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;overflow:hidden">📷</div></label><input type="file" id="avatar-upload" accept="image/*" style="display:none"><input id="profile-name" placeholder="输入角色名称" maxlength="12"></div></div>
   <div class="map-wrap" id="map-wrap"><canvas id="map-canvas"></canvas></div>
-  <div class="game-bar" id="game-bar"><div class="joystick" id="joystick"><div class="stick" id="joystick-stick"></div></div><div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 14px"><label for="game-avatar-upload" style="cursor:pointer;flex-shrink:0"><div id="self-color" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#5b4dcc,#7c6aee);display:flex;align-items:center;justify-content:center;background-size:cover"></div></label><input type="file" id="game-avatar-upload" accept="image/*" style="display:none"><div style="flex:1;min-width:0;cursor:pointer" id="self-name-wrap"><div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="self-name">我</div><div style="font-size:11px" id="self-mic">发言中</div></div><button class="btn" id="btn-mic" style="width:48px;height:48px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:20px">🎤</button><button class="btn btn-secondary" id="btn-leave" style="width:36px;height:36px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center">🚪</button></div></div>
+  <div class="game-bar" id="game-bar"><div class="joystick" id="joystick"><div class="stick" id="joystick-stick"></div></div><div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 14px"><label for="game-avatar-upload" style="cursor:pointer;flex-shrink:0"><div id="self-color" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#5b4dcc,#7c6aee);display:flex;align-items:center;justify-content:center;background-size:cover"></div></label><input type="file" id="game-avatar-upload" accept="image/*" style="display:none"><div style="flex:1;min-width:0;cursor:pointer" id="self-name-wrap"><div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="self-name">我</div><div style="font-size:11px" id="self-mic">发言中</div></div><button class="btn" id="btn-mic" style="width:48px;height:48px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:20px">🎤</button><button class="btn btn-secondary" id="btn-debug" style="width:36px;height:36px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px">📋</button><button class="btn btn-secondary" id="btn-leave" style="width:36px;height:36px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center">🚪</button></div></div>
+</div>
+<!-- 调试面板 -->
+<div class="debug-panel" id="debug-panel">
+  <div class="debug-header"><h2>📋 调试日志</h2><button class="btn btn-secondary" id="debug-close" style="padding:4px 10px;font-size:12px">✕</button></div>
+  <div class="debug-filters">
+    <button id="debug-filter-all" style="background:var(--accent)">全部</button>
+    <button id="debug-filter-conn">🔗 连接</button>
+    <button id="debug-filter-audio">🎧 音频</button>
+    <button id="debug-filter-pos">📍 位置</button>
+    <button id="debug-filter-avatar">🖼️ 头像</button>
+  </div>
+  <div class="debug-wrap" id="debug-wrap"><div class="debug-list" id="debug-list"></div></div>
 </div>
 </body>
 </html>

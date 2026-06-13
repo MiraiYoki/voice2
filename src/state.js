@@ -127,6 +127,9 @@ const _rawState = {
   _lkRoom: null,
   _dcIntervals: [],
 
+  // ── 调试日志 ──
+  _logs: [],          // [{t,cat,msg}] — 由 utils.js addLog() 填充
+
   // ── DOM 缓存 (初始化在 main.js) ──
   dom: {
     canvas: null,
