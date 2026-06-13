@@ -34,8 +34,9 @@ export const PANNER_ROLLOFF_FACTOR = 2;
 export const EARSHOT_RADIUS = 500;  // 可听范围 (同 maxDistance)
 
 // 选择性订阅滞后阈值 (防边界抖动)
-export const SUBSCRIBE_IN  = 420;  // 进入此距离 → 订阅
-export const UNSUBSCRIBE_OUT = 550; // 超出此距离 → 取消订阅
+// 订阅范围需大于音频衰减范围, 确保衰减到极小后オ切断
+export const SUBSCRIBE_IN  = 500;  // 进入此距离 → 订阅
+export const UNSUBSCRIBE_OUT = 700; // 超出此距离 → 取消订阅 ( > maxDistance=500)
 
 // 死推算
 export const DR_MAX_TIME = 500;    // 超过此时间无更新 → 冻结

@@ -216,13 +216,12 @@ export function updateSpatialAudio() {
 
     if (p._isIOS) {
       const dist = Math.sqrt(rx * rx + ry * ry);
-      // 距离衰减 (软曲线, 最大距离不归零而是降到 0.05)
-      const ratio = Math.max(0, Math.min(1, 1 - (dist - PANNER_REF_DISTANCE) / (PANNER_MAX_DISTANCE - PANNER_REF_DISTANCE)));
-      const vol = 0.05 + 0.95 * ratio;
-      if (p.gainNode) p.gainNode.gain.setTargetAtTime(vol, tNow, 0.02);
-      // 左右声像 (缩小参考距离, 增强效果)
+      // 自然衰减曲线: vol=1/(1+dist/120), 100px→0.55, 300px→0.29, 500px→0.19
+      const vol = 1 / (1 + dist / 120);
+      if (p.gainNode) p.gainNode.gain.setTargetAtTime(vol, tNow, 0.05);
+      // 左右声像
       if (p._stereoPanner) {
-        const pan = Math.max(-1, Math.min(1, rx / 200)); // 200px 即全偏
+        const pan = Math.max(-1, Math.min(1, rx / 200));
         p._stereoPanner.pan.setTargetAtTime(pan, tNow, 0.02);
       }
     } else if (p.panner) {
@@ -598,8 +597,8 @@ export function removePeer(pid) {
 export function checkSubscriptions() {
   if (!state._lkRoom || state._lkRoom.state !== 'connected') return;
   const q = state._qualityLevel;
-  const subIn  = q === 'bad' ? 150 : q === 'poor' ? 280 : SUBSCRIBE_IN;
-  const subOut = q === 'bad' ? 250 : q === 'poor' ? 380 : UNSUBSCRIBE_OUT;
+  const subIn  = q === 'bad' ? 200 : q === 'poor' ? 350 : SUBSCRIBE_IN;
+  const subOut = q === 'bad' ? 350 : q === 'poor' ? 500 : UNSUBSCRIBE_OUT;
 
   for (const [pid, p] of state.peers) {
     if (!p._pub) continue;
