@@ -205,4 +205,98 @@ function wireDebugPanel() {
     const panel = $('debug-panel');
     if (panel) panel.style.display = 'none';
   };
+
+  // 立体声测试
+  wireStereoTest();
+}
+
+let _stereoOsc = null, _stereoGain = null, _stereoCleanup = null;
+function wireStereoTest() {
+  const status = $('stereo-test-status');
+  const setStatus = (s) => { if (status) status.textContent = s; };
+
+  function stopTest() {
+    if (_stereoCleanup) { try { _stereoCleanup(); } catch(e) {} _stereoCleanup = null; }
+    if (_stereoGain) { try { _stereoGain.disconnect(); } catch(e) {} _stereoGain = null; }
+    if (_stereoOsc) { try { _stereoOsc.stop(); _stereoOsc.disconnect(); } catch(e) {} _stereoOsc = null; }
+    setStatus('点击按钮播放左→右移动测试音');
+  }
+
+  function startTest(method) {
+    stopTest();
+    const ctx = state.audioCtx || new AudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 440;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.1;
+    _stereoOsc = osc;
+    _stereoGain = gain;
+
+    if (method === 'a') {
+      // StereoPanner (当前iOS方案)
+      const pan = ctx.createStereoPanner();
+      osc.connect(pan).connect(gain).connect(ctx.destination);
+      let t = 0;
+      const iv = setInterval(() => {
+        t += 0.03;
+        const p = Math.sin(t);
+        pan.pan.value = p;
+        setStatus('StereoPanner | pan=' + p.toFixed(2) + ' (左-1..右+1)');
+      }, 30);
+      _stereoCleanup = () => { clearInterval(iv); osc.stop(); osc.disconnect(); pan.disconnect(); };
+    } else if (method === 'b') {
+      // Haas效应: 声道间微延迟
+      const splitter = ctx.createChannelSplitter(2);
+      const merger = ctx.createChannelMerger(2);
+      const delayR = ctx.createDelay(0.001);
+      delayR.delayTime.value = 0;
+      osc.connect(splitter);
+      let t = 0;
+      const iv = setInterval(() => {
+        t += 0.03;
+        const ms = 0.2 + (Math.sin(t) + 1) * 0.3; // 0.2~0.8ms
+        delayR.delayTime.value = ms / 1000;
+        setStatus('Haas延迟 | delay=' + ms.toFixed(2) + 'ms (0=L 大=R)');
+      }, 30);
+      // L: 直连, R: 经delay
+      splitter.connect(merger, 0, 0); // L→L
+      splitter.connect(delayR, 1);    // R→delay
+      delayR.connect(merger, 0, 1);   // delay→R
+      merger.connect(gain).connect(ctx.destination);
+      _stereoCleanup = () => { clearInterval(iv); osc.stop(); osc.disconnect(); splitter.disconnect(); delayR.disconnect(); merger.disconnect(); };
+    } else if (method === 'c') {
+      // ChannelSplit + 独立增益 (真立体声)
+      const splitter = ctx.createChannelSplitter(2);
+      const merger = ctx.createChannelMerger(2);
+      const gainL = ctx.createGain();
+      const gainR = ctx.createGain();
+      gainL.gain.value = 1;
+      gainR.gain.value = 1;
+      osc.connect(splitter);
+      let t = 0;
+      const iv = setInterval(() => {
+        t += 0.03;
+        const v = Math.sin(t);
+        gainL.gain.value = Math.max(0, 1 - v); // 越左越响
+        gainR.gain.value = Math.max(0, 1 + v); // 越右越响
+        setStatus('ChannelSplit | L=' + gainL.gain.value.toFixed(2) + ' R=' + gainR.gain.value.toFixed(2));
+      }, 30);
+      splitter.connect(gainL, 0);
+      splitter.connect(gainR, 1);
+      gainL.connect(merger, 0, 0);
+      gainR.connect(merger, 0, 1);
+      merger.connect(gain).connect(ctx.destination);
+      _stereoCleanup = () => { clearInterval(iv); osc.stop(); osc.disconnect(); splitter.disconnect(); gainL.disconnect(); gainR.disconnect(); merger.disconnect(); };
+    }
+
+    osc.start();
+  }
+
+  $('stereo-test-a')?.addEventListener('click', () => startTest('a'));
+  $('stereo-test-b')?.addEventListener('click', () => startTest('b'));
+  $('stereo-test-c')?.addEventListener('click', () => startTest('c'));
+  $('stereo-test-stop')?.addEventListener('click', stopTest);
 }

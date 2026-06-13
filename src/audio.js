@@ -50,10 +50,10 @@ export async function makeLKToken(identity, room) {
 }
 
 // ── 5b. 空间音频管线 ──
-// 移动端检测: iOS(iPhone/iPad/iPod) + 新 iPad(桌面UA+触屏) + Android移动端
-const isMobile = (() => {
-  if (/iPhone|iPad|iPod|Android/.test(navigator.userAgent)) return true;
-  // iPadOS 13+: 桌面UA + 触屏
+// iOS 检测 (iPhone/iPad/iPod + 新iPad桌面UA)
+// Android 走桌面 HRTF (Chrome 完全支持 PannerNode)
+const isIOS = (() => {
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) return true;
   if (navigator.maxTouchPoints > 1 && /MacIntel/.test(navigator.platform)) return true;
   return false;
 })();
@@ -143,7 +143,7 @@ export async function setupAudioNodes(pid, remoteStream) {
   }, 500);
   info._diagTimer = diagTimer;  // 存储以便 removePeer 清理
 
-  if (isMobile) {
+  if (isIOS) {
     // iOS Safari 不支持 HRTF PannerNode → 用 StereoPanner (左右) + Gain (距离)
     const stereo = state.audioCtx.createStereoPanner();
     const gain = state.audioCtx.createGain();
@@ -152,7 +152,7 @@ export async function setupAudioNodes(pid, remoteStream) {
     info._stereoPanner = stereo;
     info.gainNode = gain;
     info._isIOS = true;
-    addLog('audio', '移动端模式: StereoPanner(左右) + 距离衰减');
+    addLog('audio', 'iOS模式: StereoPanner(左右) + 距离衰减');
   } else {
     const panner = state.audioCtx.createPanner();
     const gain = state.audioCtx.createGain();
@@ -268,6 +268,17 @@ export async function toggleMic() {
 
     // 已有流：翻转 enabled (SkyOffice 同款，0ms 响应)
     const track = state.localStream.getAudioTracks()[0];
+    if (!track || track.readyState === 'ended') {
+      // 音轨失效，重建
+      addLog('audio', '⚠️ 音轨已失效，重建中');
+      state.localStream.getAudioTracks().forEach(t => t.stop());
+      state.localStream = null;
+      state.micOn = false;
+      updateMicUI(false);
+      state.micBusy = false;  // 释放锁后重试
+      toggleMic();
+      return;
+    }
     state.micOn = !state.micOn;
     track.enabled = state.micOn;
     updateMicUI(state.micOn);
