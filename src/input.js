@@ -5,7 +5,7 @@
 import { state } from './state.js';
 import { $ } from './utils.js';
 import { MOVE_SPEED, ROOM_SIZE } from './config.js';
-import { updateSpatialAudio } from './audio.js';
+import { updateSpatialAudio, checkSubscriptions } from './audio.js';
 
 // ── 7a. 键盘 ──
 export function onKeyDown(e) {
@@ -89,4 +89,5 @@ export function moveTick() {
   state.myPos.x = Math.max(pad, Math.min(state.myPos.x + state.inputDir.x * MOVE_SPEED, state.worldW - pad));
   state.myPos.y = Math.max(pad, Math.min(state.myPos.y + state.inputDir.y * MOVE_SPEED, state.worldH - pad));
   updateSpatialAudio();
+  checkSubscriptions();  // 响应式：我移动了，检查订阅
 }

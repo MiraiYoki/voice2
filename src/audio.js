@@ -223,49 +223,43 @@ export function updateSpatialAudio() {
   }
 }
 
-// ── 5d. 推讲 (toggleMic) ──
+// ── 5d. 推讲 (toggleMic) — SkyOffice 同款: track.enabled 翻转 ──
 export async function toggleMic() {
   if (state.micBusy || state._closing) return;
   state.micBusy = true;
   try {
-    if (state.localStream) {
-      // 关麦：停止本地流 + 从 LiveKit 取消发布
-      state.micOn = false;
-      if (state._lkRoom && state._lkRoom.state === 'connected') {
-        try {
-          const pub = state._lkRoom.localParticipant.getTrackPublication('mic');
-          if (pub) state._lkRoom.localParticipant.unpublishTrack(pub);
-        } catch (e) {}
-      }
-      state.localStream.getAudioTracks().forEach(t => t.stop());
-      state.localStream = null;
-      updateMicUI(false);
-      addLog('audio', '🔇 麦克风已关闭');
-    } else {
-      // 开麦：获取新流 + 发布到 LiveKit
+    // 首次开麦：获取流 + 发布，之后常驻不杀
+    if (!state.localStream) {
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
-      state.micOn = true;
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
+      state.micOn = true;
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已开启');
 
-      // 发布到 LiveKit
       if (state._lkRoom && state._lkRoom.state === 'connected') {
         const tracks = state.localStream.getAudioTracks();
         if (tracks.length > 0 && tracks[0].readyState === 'live') {
           const audioTrack = new LocalAudioTrack(tracks[0]);
           try {
             await state._lkRoom.localParticipant.publishTrack(audioTrack, { name: 'mic' });
-            addLog('audio', '📤 音轨已重新发布');
+            addLog('audio', '📤 音轨已发布');
           } catch (e) {
-            addLog('err', '重新发布失败: ' + e.message);
+            addLog('err', '发布失败: ' + e.message);
           }
         }
       }
+      return;
     }
+
+    // 已有流：翻转 enabled (SkyOffice 同款，0ms 响应)
+    const track = state.localStream.getAudioTracks()[0];
+    state.micOn = !state.micOn;
+    track.enabled = state.micOn;
+    updateMicUI(state.micOn);
+    addLog('audio', state.micOn ? '🎤 麦克风已开启' : '🔇 麦克风已关闭');
   } catch (e) {
     toast('麦克风切换失败');
     addLog('err', '麦克风切换失败: ' + e.message);
@@ -542,26 +536,13 @@ export async function connectLiveKit(roomName) {
       addLog('avatar', '头像已发送 (1s重试)');
     }, 1000);
 
-    const subInterval = setInterval(() => {
-      // 网络自适应：弱网时缩小可听范围，减轻带宽压力
-      const q = state._qualityLevel;
-      const subIn  = q === 'bad' ? 150 : q === 'poor' ? 280 : SUBSCRIBE_IN;
-      const subOut = q === 'bad' ? 250 : q === 'poor' ? 380 : UNSUBSCRIBE_OUT;
+    // 响应式订阅检查 (LiveKit 同款 — 位置变化时立即调，无需轮询)
+    // 同时保留 2s 慢保活定时器
+    state._dcIntervals.push(setInterval(checkSubscriptions, 2000));
+    checkSubscriptions();  // 立即执行一次
 
-      for (const [pid, p] of state.peers) {
-        if (!p._pub) continue;
-        const dist = Math.sqrt((p.x - state.myPos.x) ** 2 + (p.y - state.myPos.y) ** 2);
-        // 滞后阈值：进入近→订阅，离开远→取消，防止边界反复横跳
-        const wasSubbed = p._subbed === true;
-        const shouldSub = wasSubbed ? dist <= subOut : dist <= subIn;
-        if (shouldSub !== wasSubbed) {
-          try { p._pub.setSubscribed(shouldSub); } catch (e) {}
-          p._subbed = shouldSub;
-        }
-      }
-    }, 300);  // 300ms 比之前的 500ms 更灵敏
-    state._dcIntervals.push(subInterval);
-    state._subInterval = subInterval;  // 独立引用，不被 stopPositionSync 误杀
+    const subInterval = setInterval(checkSubscriptions, 2000);
+    state._subInterval = subInterval;
 
     startDucking();
     startQualityMonitor();
@@ -597,6 +578,25 @@ export function removePeer(pid) {
     addLog('audio', '已清理 peer: ' + pid.slice(0,8));
   }
   updateRoomCount();
+}
+
+// ── 响应式订阅检查 (LiveKit 同款) ──
+export function checkSubscriptions() {
+  if (!state._lkRoom || state._lkRoom.state !== 'connected') return;
+  const q = state._qualityLevel;
+  const subIn  = q === 'bad' ? 150 : q === 'poor' ? 280 : SUBSCRIBE_IN;
+  const subOut = q === 'bad' ? 250 : q === 'poor' ? 380 : UNSUBSCRIBE_OUT;
+
+  for (const [pid, p] of state.peers) {
+    if (!p._pub) continue;
+    const dist = Math.sqrt((p.x - state.myPos.x) ** 2 + (p.y - state.myPos.y) ** 2);
+    const wasSubbed = p._subbed === true;
+    const shouldSub = wasSubbed ? dist <= subOut : dist <= subIn;
+    if (shouldSub !== wasSubbed) {
+      try { p._pub.setSubscribed(shouldSub); } catch (e) {}
+      p._subbed = shouldSub;
+    }
+  }
 }
 
 // ── 5g. Ducking (setTargetAtTime, 不与空间音频冲突) ──
