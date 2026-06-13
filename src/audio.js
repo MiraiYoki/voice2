@@ -425,8 +425,8 @@ export async function connectLiveKit(roomName) {
   try {
     const jwt = await makeLKToken(state.myPeerId, roomName);
     addLog('conn', 'JWT已生成');
-    await lkRoom.connect(LIVEKIT_URL, jwt);
-    addLog('conn', '🔊 LiveKit 已连接');
+    await lkRoom.connect(LIVEKIT_URL, jwt, { autoSubscribe: false });
+    addLog('conn', '🔊 LiveKit 已连接 (autoSubscribe=false)');
     setConnState('connected');
     state._lkReconnectAttempts = 0;  // 重置重连计数
 
@@ -444,6 +444,14 @@ export async function connectLiveKit(roomName) {
     } else {
       addLog('err', '⚠️ 无可用本地音轨 (readyState=' + (tracks[0]?.readyState || 'none') + ')');
     }
+
+    lkRoom.on('trackUnsubscribed', (track, pub, participant) => {
+      if (track.kind !== 'audio') return;
+      const pid = participant.identity;
+      const info = state.peers.get(pid);
+      if (info) { info._subbed = false; info.stream = null; }
+      addLog('conn', '🔇 远端取消发布: ' + pid.slice(0,8));
+    });
 
     lkRoom.on('trackSubscribed', (track, pub, participant) => {
       const pname = (participant.name || participant.identity).slice(0,8);
@@ -471,6 +479,14 @@ export async function connectLiveKit(roomName) {
         setupAudioNodes(pid, remoteStream);
       } catch (e) {
         addLog('err', '❌ setupAudioNodes 异常 [' + pid.slice(0,8) + ']: ' + e.message);
+      }
+
+      // 立即订阅近距离 peer，不等 300ms 定时器
+      const dist = Math.sqrt((info.x - state.myPos.x) ** 2 + (info.y - state.myPos.y) ** 2);
+      if (dist <= SUBSCRIBE_IN) {
+        try { pub.setSubscribed(true); } catch (e) {}
+        info._subbed = true;
+        addLog('conn', '📡 已订阅: ' + pid.slice(0,8) + ' dist=' + Math.round(dist));
       }
     });
 
