@@ -425,8 +425,8 @@ export async function connectLiveKit(roomName) {
   try {
     const jwt = await makeLKToken(state.myPeerId, roomName);
     addLog('conn', 'JWT已生成');
-    await lkRoom.connect(LIVEKIT_URL, jwt, { autoSubscribe: false });
-    addLog('conn', '🔊 LiveKit 已连接 (autoSubscribe=false)');
+    await lkRoom.connect(LIVEKIT_URL, jwt);
+    addLog('conn', '🔊 LiveKit 已连接');
     setConnState('connected');
     state._lkReconnectAttempts = 0;  // 重置重连计数
 
@@ -481,13 +481,11 @@ export async function connectLiveKit(roomName) {
         addLog('err', '❌ setupAudioNodes 异常 [' + pid.slice(0,8) + ']: ' + e.message);
       }
 
-      // 立即订阅近距离 peer，不等 300ms 定时器
-      const dist = Math.sqrt((info.x - state.myPos.x) ** 2 + (info.y - state.myPos.y) ** 2);
-      if (dist <= SUBSCRIBE_IN) {
-        try { pub.setSubscribed(true); } catch (e) {}
-        info._subbed = true;
-        addLog('conn', '📡 已订阅: ' + pid.slice(0,8) + ' dist=' + Math.round(dist));
-      }
+      // 标记已订阅 (autoSubscribe=true 时默认已订阅)
+      // 这样定时器首次检查走 subOut(550px) 而非 subIn(420px)
+      // 避免地图加载后位置变动导致误取消订阅
+      info._subbed = true;
+      addLog('conn', '📡 已标记: ' + pid.slice(0,8));
     });
 
     lkRoom.on('participantDisconnected', p => {
