@@ -7,66 +7,29 @@ import { MQTT_URLS } from './config.js';
 import { state } from './state.js';
 import { $, toast, addLog } from './utils.js';
 
-// ── 4a. 连接MQTT + 订阅房间 (多broker容灾) ──
+// ── 4a. 连接MQTT + 订阅房间 (多broker容灾 + LWT遗嘱) ──
 let _mqttIdx = 0;
 
-export function connectRegistry() {
-  const url = MQTT_URLS[_mqttIdx % MQTT_URLS.length];
-  addLog('conn', 'MQTT连接: ' + url.replace('wss://','').split('/')[0]);
-
-  state.regMqtt = mqtt.connect(url, {
+function doConnect(url, willTopic) {
+  const opts = {
     clean: true,
     connectTimeout: 8000,
     reconnectPeriod: 3000,
-  });
+  };
+  // LWT遗嘱: 客户端异常断开时自动清空房间
+  if (willTopic) {
+    opts.will = { topic: willTopic, payload: '', retain: true };
+  }
+  state.regMqtt = mqtt.connect(url, opts);
+}
 
-  state.regMqtt.on('connect', () => {
-    state.regMqtt.subscribe('voice-registry/#');
-    addLog('conn', 'MQTT已连接');
-    toast('MQTT已连接');
-  });
-
-  state.regMqtt.on('error', (e) => {
-    addLog('err', 'MQTT错误: ' + e.message);
-    // 连续错误超过阈值，切换 broker
-    _mqttIdx++;
-    if (_mqttIdx < MQTT_URLS.length * 3) {
-      addLog('conn', 'MQTT将在3s后重试...');
-    }
-  });
-  state.regMqtt.on('close', () => {
-    addLog('conn', 'MQTT断开');
-    // 如果长时间断开，尝试下一个 broker
-    setTimeout(() => {
-      if (!state.regMqtt?.connected) {
-        _mqttIdx++;
-        addLog('conn', 'MQTT切换broker: #' + (_mqttIdx % MQTT_URLS.length));
-        connectRegistry();
-      }
-    }, 10000);
-  });
-
-  state.regMqtt.on('message', (topic, msg) => {
-    const name = topic.replace('voice-registry/', '');
-    if (!msg.toString()) {
-      // 空消息 = 房间销毁
-      state.rooms.delete(name);
-      if (name === state.currentRoom && !state._closing) {
-        // 别人销毁了房间才自动退出，自己销毁时跳过（_closing=true）
-        toast('房间已被销毁');
-        import('./ui.js').then(m => m.leaveRoom()).catch(() => {
-          state.currentRoom = null;
-        });
-      }
-    } else {
-      try {
-        const d = JSON.parse(msg.toString());
-        state.rooms.set(name, d);
-        toast('发现房间: ' + name);
-      } catch (e) { /* ignore malformed */ }
-    }
-    renderRoomList();
-  });
+// 页面加载时调用: 无遗嘱连接
+export function connectRegistry() {
+  const url = MQTT_URLS[_mqttIdx % MQTT_URLS.length];
+  addLog('conn', 'MQTT连接: ' + url.replace('wss://','').split('/')[0]);
+  doConnect(url, null);
+  _wireBaseHandlers();
+  _wireMessageHandler();
 }
 
 // ── 4b. 渲染房间列表 ──
@@ -129,4 +92,63 @@ export function updateRoomCount() {
       JSON.stringify({ hasPassword: info?.hasPassword || false, memberCount: count }),
       { retain: true });
   }
+}
+
+// ── 4d. LWT遗嘱管理 ──
+function _wireBaseHandlers() {
+  state.regMqtt.on('connect', () => {
+    state.regMqtt.subscribe('voice-registry/#');
+    addLog('conn', 'MQTT已连接');
+  });
+  state.regMqtt.on('error', (e) => {
+    addLog('err', 'MQTT错误: ' + e.message);
+    _mqttIdx++;
+  });
+  state.regMqtt.on('close', () => {
+    addLog('conn', 'MQTT断开');
+    setTimeout(() => {
+      if (!state.regMqtt?.connected) {
+        _mqttIdx++;
+        addLog('conn', 'MQTT切换broker');
+        connectRegistry();
+      }
+    }, 10000);
+  });
+}
+
+export function setRoomWill(roomName) {
+  if (!state.regMqtt) return;
+  const url = MQTT_URLS[_mqttIdx % MQTT_URLS.length];
+  state.regMqtt.end(true);
+  doConnect(url, 'voice-registry/' + roomName);
+  _wireBaseHandlers();
+  _wireMessageHandler();
+}
+
+export function clearRoomWill() {
+  if (!state.regMqtt) return;
+  const url = MQTT_URLS[_mqttIdx % MQTT_URLS.length];
+  state.regMqtt.end(true);
+  doConnect(url, null);
+  _wireBaseHandlers();
+  _wireMessageHandler();
+}
+
+function _wireMessageHandler() {
+  state.regMqtt.on('message', (topic, msg) => {
+    const name = topic.replace('voice-registry/', '');
+    if (!msg.toString()) {
+      state.rooms.delete(name);
+      if (name === state.currentRoom && !state._closing) {
+        toast('房间已被销毁');
+        import('./ui.js').then(m => m.leaveRoom()).catch(() => { state.currentRoom = null; });
+      }
+    } else {
+      try {
+        const d = JSON.parse(msg.toString());
+        state.rooms.set(name, d);
+      } catch (e) { /* ignore malformed */ }
+    }
+    renderRoomList();
+  });
 }

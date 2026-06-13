@@ -7,7 +7,7 @@ import { $, toast, simpleHash, showPanel, renderAllLogs, addLog } from './utils.
 import { ROOM_SIZE } from './config.js';
 import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking, stopQualityMonitor } from './audio.js';
 import { stopPositionSync } from './netcode.js';
-import { renderRoomList } from './registry.js';
+import { renderRoomList, setRoomWill, clearRoomWill } from './registry.js';
 
 // ── 9a. 加入房间 ──
 export function joinRoom(asCreator) {
@@ -33,8 +33,9 @@ export function joinRoom(asCreator) {
   $('status').textContent = '连接中...';
   $('self-name').textContent = state.profileName || '我';
 
-  // 连接语音
+  // 连接语音 + LWT遗嘱
   connectLiveKit(roomName);
+  setRoomWill(roomName);
 }
 
 // ── 9b. 离开房间 ──
@@ -78,7 +79,8 @@ export function leaveRoom() {
   state.isRoomCreator = false;
   state.myPeerId = null;
 
-  // 关麦克风 + 恢复音乐模式
+  // 清除LWT遗嘱 + 关麦
+  clearRoomWill();
   if (state.localStream) {
     try { state.localStream.getAudioTracks().forEach(t => t.stop()); } catch (e) {}
     state.localStream = null;
