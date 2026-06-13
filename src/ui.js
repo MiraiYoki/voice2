@@ -40,13 +40,11 @@ export function joinRoom(asCreator) {
 // ── 9b. 离开房间 ──
 export function leaveRoom() {
   if (!state.currentRoom) return;
-  state._closing = true;  // 阻止 toggleMic 等异步操作
 
-  // 清理房间 — 任何人退出都检查，最后一个人负责销毁
+  // 最后一人退出前确认，非最后更新人数
   if (state.regMqtt) {
-    const isLast = state.peers.size === 0;
-    if (isLast && !confirm('你是最后一个在线的人，退出后房间将消失。确定退出？')) return;
-    if (isLast) {
+    if (state.peers.size === 0) {
+      if (!confirm('你是最后一个在线的人，退出后房间将消失。确定退出？')) return;
       state.regMqtt.publish('voice-registry/' + state.currentRoom, '', { retain: true });
       addLog('conn', '🏚️ 最后一人退出，房间已销毁');
     } else {
@@ -57,7 +55,7 @@ export function leaveRoom() {
     }
   }
 
-  // 断开 LiveKit (先标记离开，防止触发自动重连)
+  state._closing = true;
   state._lkRoomName = null;
   if (state._lkRoom) { try { state._lkRoom.disconnect(); } catch (e) {} state._lkRoom = null; }
 
