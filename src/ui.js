@@ -3,7 +3,7 @@
 // ╚══════════════════════════════════════════╝
 
 import { state } from './state.js';
-import { $, toast, simpleHash, showPanel, renderAllLogs } from './utils.js';
+import { $, toast, simpleHash, showPanel, renderAllLogs, addLog } from './utils.js';
 import { ROOM_SIZE } from './config.js';
 import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking, stopQualityMonitor } from './audio.js';
 import { stopPositionSync } from './netcode.js';
@@ -41,10 +41,16 @@ export function joinRoom(asCreator) {
 export function leaveRoom() {
   if (!state.currentRoom) return;
 
+  // _closing 先置 true，防止 MQTT 回弹触发二次确认
+  state._closing = true;
+
   // 最后一人退出前确认，非最后更新人数
   if (state.regMqtt) {
     if (state.peers.size === 0) {
-      if (!confirm('你是最后一个在线的人，退出后房间将消失。确定退出？')) return;
+      if (!confirm('你是最后一个在线的人，退出后房间将消失。确定退出？')) {
+        state._closing = false;  // 取消退出，重置
+        return;
+      }
       state.regMqtt.publish('voice-registry/' + state.currentRoom, '', { retain: true });
       addLog('conn', '🏚️ 最后一人退出，房间已销毁');
     } else {
@@ -54,8 +60,6 @@ export function leaveRoom() {
         { retain: true });
     }
   }
-
-  state._closing = true;
   state._lkRoomName = null;
   if (state._lkRoom) { try { state._lkRoom.disconnect(); } catch (e) {} state._lkRoom = null; }
 
