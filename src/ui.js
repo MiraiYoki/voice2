@@ -210,16 +210,14 @@ function wireDebugPanel() {
   wireStereoTest();
 }
 
-let _stereoOsc = null, _stereoGain = null, _stereoCleanup = null;
+let _stereoCleanup = null;
 function wireStereoTest() {
   const status = $('stereo-test-status');
   const setStatus = (s) => { if (status) status.textContent = s; };
 
   function stopTest() {
     if (_stereoCleanup) { try { _stereoCleanup(); } catch(e) {} _stereoCleanup = null; }
-    if (_stereoGain) { try { _stereoGain.disconnect(); } catch(e) {} _stereoGain = null; }
-    if (_stereoOsc) { try { _stereoOsc.stop(); _stereoOsc.disconnect(); } catch(e) {} _stereoOsc = null; }
-    setStatus('点击按钮播放测试音');
+    setStatus('就绪');
   }
 
   function getCtx() {
@@ -228,147 +226,122 @@ function wireStereoTest() {
     return ctx;
   }
 
-  function makeOsc(ctx, freq) {
-    const o = ctx.createOscillator();
-    o.type = 'sine';
-    o.frequency.value = freq;
-    return o;
-  }
-
   function diagInfo(ctx) {
     const d = ctx.destination;
-    return 'ctx=' + ctx.state + ' dstCh=' + d.channelCount + ' maxCh=' + d.maxChannelCount;
+    return 'ctx=' + ctx.state + ' ch=' + d.channelCount + ' maxCh=' + d.maxChannelCount;
   }
 
-  // 方法1: 硬切左→右 (左右分别发不同频率)
-  function test_hardLR() {
+  // 左右轮播器: 每秒切换左右, 播放 beep 音
+  // method: 'panner' | 'merger' | 'buffer' | 'haas' | 'forceDest'
+  function startLRTest(method) {
     stopTest();
     const ctx = getCtx();
-    const oscL = makeOsc(ctx, 330);  // E4
-    const oscR = makeOsc(ctx, 660);  // E5
-    const gain = ctx.createGain(); gain.gain.value = 0.08;
-    const merger = ctx.createChannelMerger(2);
-    oscL.connect(merger, 0, 0);
-    oscR.connect(merger, 0, 1);
-    merger.connect(gain).connect(ctx.destination);
-    oscL.start(); oscR.start();
-    _stereoOsc = oscL;
-    _stereoGain = gain;
-    setStatus('🔊 硬切: 左耳330Hz 右耳660Hz | ' + diagInfo(ctx));
-    _stereoCleanup = () => { oscL.stop(); oscR.stop(); oscL.disconnect(); oscR.disconnect(); merger.disconnect(); };
-  }
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 440;
+    const g = ctx.createGain();
+    g.gain.value = 0.12;
 
-  // 方法2: StereoPanner 慢扫
-  function test_stereoPanner() {
-    stopTest();
-    const ctx = getCtx();
-    const osc = makeOsc(ctx, 440);
-    const gain = ctx.createGain(); gain.gain.value = 0.1;
-    const pan = ctx.createStereoPanner();
-    osc.connect(pan).connect(gain).connect(ctx.destination);
-    let t = 0;
-    const iv = setInterval(() => { t += 0.015; pan.pan.value = Math.sin(t); }, 30);
-    _stereoOsc = osc; _stereoGain = gain;
-    setStatus('🔊 StereoPanner慢扫 | ' + diagInfo(ctx));
-    _stereoCleanup = () => { clearInterval(iv); osc.stop(); osc.disconnect(); pan.disconnect(); };
-  }
+    let pan, merger, split, delayR, bufSrc;
+    let side = 0; // 0=左, 1=右
+    const names = { panner:'StereoPanner', merger:'ChannelMerger', buffer:'AudioBuffer', haas:'Haas延迟', forceDest:'强制Dest' };
 
-  // 方法3: AudioBuffer 双声道硬数据
-  function test_audioBuffer() {
-    stopTest();
-    const ctx = getCtx();
-    const sr = ctx.sampleRate;
-    const dur = 9999;
-    const buf = ctx.createBuffer(2, sr * dur, sr);
-    const L = buf.getChannelData(0), R = buf.getChannelData(1);
-    for (let i = 0; i < L.length; i++) {
-      const t = i / sr;
-      L[i] = 0.08 * Math.sin(2 * Math.PI * 330 * t);
-      R[i] = 0.08 * Math.sin(2 * Math.PI * 660 * t);
+    if (method === 'forceDest') {
+      ctx.destination.channelCount = 2;
+      ctx.destination.channelCountMode = 'explicit';
+      ctx.destination.channelInterpretation = 'discrete';
+      merger = ctx.createChannelMerger(2);
     }
-    const src = ctx.createBufferSource(); src.buffer = buf;
-    src.connect(ctx.destination);
-    src.start();
-    _stereoOsc = { stop: () => src.stop(), disconnect: () => src.disconnect() };
-    setStatus('🔊 AudioBuffer硬立体声 L330Hz R660Hz | ' + diagInfo(ctx));
-    _stereoCleanup = () => { src.stop(); src.disconnect(); };
+
+    if (method === 'panner') {
+      pan = ctx.createStereoPanner();
+      osc.connect(pan).connect(g).connect(ctx.destination);
+    } else if (method === 'merger') {
+      merger = ctx.createChannelMerger(2);
+      osc.connect(merger, 0, 0);
+      osc.connect(merger, 0, 1);
+      merger.connect(g).connect(ctx.destination);
+    } else if (method === 'buffer') {
+      bufSrc = ctx.createBufferSource();
+      const sr = ctx.sampleRate;
+      const buf = ctx.createBuffer(2, sr * 9999, sr);
+      for (let i = 0; i < sr; i++) {
+        buf.getChannelData(0)[i] = 0.12 * Math.sin(2*Math.PI*440*i/sr);
+        buf.getChannelData(1)[i] = 0;
+      }
+      bufSrc.buffer = buf;
+      bufSrc.loop = true;
+      bufSrc.connect(ctx.destination);
+      bufSrc.start();
+    } else if (method === 'haas') {
+      split = ctx.createChannelSplitter(2);
+      merger = ctx.createChannelMerger(2);
+      delayR = ctx.createDelay(0.001);
+      delayR.delayTime.value = 0.0005; // 0.5ms
+      osc.connect(split);
+      split.connect(merger, 0, 0);
+      split.connect(delayR, 1);
+      delayR.connect(merger, 0, 1);
+      merger.connect(g).connect(ctx.destination);
+    } else if (method === 'forceDest') {
+      osc.connect(merger, 0, 0);
+      osc.connect(merger, 0, 1);
+      merger.connect(g).connect(ctx.destination);
+    }
+
+    // 每秒切换左右
+    const iv = setInterval(() => {
+      side = 1 - side;
+      if (method === 'panner') {
+        pan.pan.value = side ? 1 : -1;
+      } else if (method === 'merger' || method === 'forceDest') {
+        // 断开旧连接, 重新连到目标声道
+        osc.disconnect();
+        if (merger) {
+          osc.connect(merger, 0, side);
+          setStatus(names[method] + ' | ▶ ' + (side?'右耳':'左耳') + ' | ' + diagInfo(ctx));
+        }
+      } else if (method === 'buffer') {
+        const sr = ctx.sampleRate;
+        const buf = ctx.createBuffer(2, sr * 9999, sr);
+        for (let i = 0; i < sr; i++) {
+          buf.getChannelData(side)[i] = 0.12 * Math.sin(2*Math.PI*440*i/sr);
+          buf.getChannelData(1-side)[i] = 0;
+        }
+        bufSrc.stop();
+        bufSrc.disconnect();
+        bufSrc = ctx.createBufferSource();
+        bufSrc.buffer = buf;
+        bufSrc.loop = true;
+        bufSrc.connect(ctx.destination);
+        bufSrc.start();
+        setStatus(names[method] + ' | ▶ ' + (side?'右耳':'左耳') + ' | ' + diagInfo(ctx));
+      } else if (method === 'haas') {
+        delayR.delayTime.value = side ? 0.0005 : 0;
+        setStatus(names[method] + ' | delay=' + (side?'0.5ms→左先右后':'0ms→同到') + ' | ' + diagInfo(ctx));
+      }
+      if (method === 'panner' || method === 'haas') {
+        setStatus(names[method] + ' | ▶ ' + (side?'右耳':'左耳') + ' | ' + diagInfo(ctx));
+      }
+    }, 800);
+
+    osc.start();
+    _stereoCleanup = () => {
+      clearInterval(iv);
+      try { osc.stop(); osc.disconnect(); } catch(e) {}
+      try { if(pan) pan.disconnect(); } catch(e) {}
+      try { if(merger) merger.disconnect(); } catch(e) {}
+      try { if(split) split.disconnect(); } catch(e) {}
+      try { if(delayR) delayR.disconnect(); } catch(e) {}
+      try { if(bufSrc) { bufSrc.stop(); bufSrc.disconnect(); } } catch(e) {}
+    };
+    setStatus(names[method] + ' | ▶ 左耳 | ' + diagInfo(ctx));
   }
 
-  // 方法4: 强制destination为双声道 + ChannelMerger
-  function test_forceDest() {
-    stopTest();
-    const ctx = getCtx();
-    ctx.destination.channelCount = 2;
-    ctx.destination.channelCountMode = 'explicit';
-    ctx.destination.channelInterpretation = 'discrete';
-    const oscL = makeOsc(ctx, 440);
-    const oscR = makeOsc(ctx, 880);
-    const gain = ctx.createGain(); gain.gain.value = 0.06;
-    const merger = ctx.createChannelMerger(2);
-    oscL.connect(merger, 0, 0);
-    oscR.connect(merger, 0, 1);
-    merger.connect(gain).connect(ctx.destination);
-    oscL.start(); oscR.start();
-    _stereoOsc = oscL; _stereoGain = gain;
-    setStatus('🔊 强制dest=2ch L440Hz R880Hz | ' + diagInfo(ctx));
-    _stereoCleanup = () => { oscL.stop(); oscR.stop(); oscL.disconnect(); oscR.disconnect(); merger.disconnect(); };
-  }
-
-  // 方法5: Haas效应 (声道间延迟)
-  function test_haas() {
-    stopTest();
-    const ctx = getCtx();
-    const osc = makeOsc(ctx, 440);
-    const gain = ctx.createGain(); gain.gain.value = 0.08;
-    const split = ctx.createChannelSplitter(2);
-    const merge = ctx.createChannelMerger(2);
-    const delayR = ctx.createDelay(0.001);
-    delayR.delayTime.value = 0;
-    osc.connect(split);
-    split.connect(merge, 0, 0);
-    split.connect(delayR, 1);
-    delayR.connect(merge, 0, 1);
-    merge.connect(gain).connect(ctx.destination);
-    let t = 0;
-    const iv = setInterval(() => { t += 0.02; delayR.delayTime.value = (0.1 + (Math.sin(t)+1)*0.45) / 1000; }, 30);
-    _stereoOsc = osc; _stereoGain = gain;
-    setStatus('🔊 Haas延迟 0.1~1.0ms | ' + diagInfo(ctx));
-    _stereoCleanup = () => { clearInterval(iv); osc.stop(); osc.disconnect(); split.disconnect(); delayR.disconnect(); merge.disconnect(); };
-  }
-
-  // 方法6: 纯增益左右切 (不依赖任何panner)
-  function test_gainLR() {
-    stopTest();
-    const ctx = getCtx();
-    const oscL = makeOsc(ctx, 440);
-    const oscR = makeOsc(ctx, 880);
-    const gain = ctx.createGain(); gain.gain.value = 0.06;
-    const merger = ctx.createChannelMerger(2);
-    oscL.connect(merger, 0, 0);
-    oscR.connect(merger, 0, 1);
-    merger.connect(gain).connect(ctx.destination);
-    oscL.start(); oscR.start();
-    let t = 0;
-    const iv = setInterval(() => { t += 0.02; const v = Math.sin(t); oscL.frequency.value = 440 + 220*v; oscR.frequency.value = 440 - 220*v; }, 30);
-    _stereoOsc = oscL; _stereoGain = gain;
-    setStatus('🔊 纯增益: 双osc左右不同频 | ' + diagInfo(ctx));
-    _stereoCleanup = () => { clearInterval(iv); oscL.stop(); oscR.stop(); oscL.disconnect(); oscR.disconnect(); merger.disconnect(); };
-  }
-
-  // 一键测试所有, 自动轮换
-  const tests = [test_hardLR, test_stereoPanner, test_audioBuffer, test_forceDest, test_haas, test_gainLR];
-  const names = ['硬切LR', 'StereoPanner', 'AudioBuffer', '强制Dest', 'Haas延迟', '纯增益'];
-  let autoIdx = -1;
-  function runAll() {
-    stopTest();
-    autoIdx = (autoIdx + 1) % tests.length;
-    tests[autoIdx]();
-    setStatus('▶ [' + (autoIdx+1) + '/' + tests.length + '] ' + names[autoIdx] + ' — ' + diagInfo(getCtx()));
-  }
-
-  $('stereo-test-a')?.addEventListener('click', test_hardLR);
-  $('stereo-test-b')?.addEventListener('click', test_forceDest);
-  $('stereo-test-c')?.addEventListener('click', test_audioBuffer);
-  $('stereo-test-d')?.addEventListener('click', runAll);
-  $('stereo-test-stop')?.addEventListener('click', () => { autoIdx = -1; stopTest(); });
+  $('stereo-test-a')?.addEventListener('click', () => startLRTest('panner'));
+  $('stereo-test-b')?.addEventListener('click', () => startLRTest('merger'));
+  $('stereo-test-c')?.addEventListener('click', () => startLRTest('haas'));
+  $('stereo-test-d')?.addEventListener('click', () => startLRTest('buffer'));
+  $('stereo-test-e')?.addEventListener('click', () => startLRTest('forceDest'));
+  $('stereo-test-stop')?.addEventListener('click', stopTest);
 }
