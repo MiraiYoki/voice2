@@ -2,8 +2,13 @@
 // ║  1. CONFIG — 常量，全模块可 import        ║
 // ╚══════════════════════════════════════════╝
 
-// MQTT Broker
-export const MQTT_URL = 'wss://broker.emqx.io:8084/mqtt';
+// MQTT Broker (多级容灾)
+export const MQTT_URLS = [
+  'wss://broker.emqx.io:8084/mqtt',
+  'wss://mqtt.eclipseprojects.io:443/mqtt',
+  'wss://test.mosquitto.org:8081/mqtt',
+];
+export const MQTT_URL = MQTT_URLS[0];
 
 // 地图
 export const ROOM_SIZE = 800;

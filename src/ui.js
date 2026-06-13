@@ -46,7 +46,8 @@ export function leaveRoom() {
     state.regMqtt.publish('voice-registry/' + state.currentRoom, '', { retain: true });
   }
 
-  // 断开 LiveKit
+  // 断开 LiveKit (先标记离开，防止触发自动重连)
+  state._lkRoomName = null;
   if (state._lkRoom) { try { state._lkRoom.disconnect(); } catch (e) {} state._lkRoom = null; }
 
   // 清理 peers
@@ -75,6 +76,8 @@ export function leaveRoom() {
   // 恢复 UI
   $('game-bar').style.display = 'none';
   $('map-wrap').style.display = 'none';
+  const dot = $('conn-dot');
+  if (dot) { dot.style.display = 'none'; dot.style.background = '#e04949'; }
   $('home-panel').style.display = '';
   $('room-title').textContent = '空间语音聊天室';
   $('status').textContent = '输入房间名加入';

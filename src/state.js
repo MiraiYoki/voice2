@@ -126,6 +126,11 @@ const _rawState = {
   // ── LiveKit ──
   _lkRoom: null,
   _dcIntervals: [],
+  _lkRoomName: null,           // 保存房间名，重连用
+  _lkReconnecting: false,      // 是否正在重连
+  _lkReconnectAttempts: 0,     // 重连次数
+  _lkLastDataTime: 0,          // 最后收到数据时间 (健康检查)
+  _connState: 'disconnected',  // disconnected|connecting|connected|reconnecting
 
   // ── 调试日志 ──
   _logs: [],          // [{t,cat,msg}] — 由 utils.js addLog() 填充

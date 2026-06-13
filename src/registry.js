@@ -3,13 +3,18 @@
 // ╚══════════════════════════════════════════╝
 
 import mqtt from 'mqtt';
-import { MQTT_URL } from './config.js';
+import { MQTT_URLS } from './config.js';
 import { state } from './state.js';
-import { $, toast } from './utils.js';
+import { $, toast, addLog } from './utils.js';
 
-// ── 4a. 连接MQTT + 订阅房间 ──
+// ── 4a. 连接MQTT + 订阅房间 (多broker容灾) ──
+let _mqttIdx = 0;
+
 export function connectRegistry() {
-  state.regMqtt = mqtt.connect(MQTT_URL, {
+  const url = MQTT_URLS[_mqttIdx % MQTT_URLS.length];
+  addLog('conn', 'MQTT连接: ' + url.replace('wss://','').split('/')[0]);
+
+  state.regMqtt = mqtt.connect(url, {
     clean: true,
     connectTimeout: 8000,
     reconnectPeriod: 3000,
@@ -17,11 +22,29 @@ export function connectRegistry() {
 
   state.regMqtt.on('connect', () => {
     state.regMqtt.subscribe('voice-registry/#');
+    addLog('conn', 'MQTT已连接');
     toast('MQTT已连接');
   });
 
-  state.regMqtt.on('error', (e) => { toast('MQTT错误: ' + e.message); });
-  state.regMqtt.on('close', () => { toast('MQTT断开'); });
+  state.regMqtt.on('error', (e) => {
+    addLog('err', 'MQTT错误: ' + e.message);
+    // 连续错误超过阈值，切换 broker
+    _mqttIdx++;
+    if (_mqttIdx < MQTT_URLS.length * 3) {
+      addLog('conn', 'MQTT将在3s后重试...');
+    }
+  });
+  state.regMqtt.on('close', () => {
+    addLog('conn', 'MQTT断开');
+    // 如果长时间断开，尝试下一个 broker
+    setTimeout(() => {
+      if (!state.regMqtt?.connected) {
+        _mqttIdx++;
+        addLog('conn', 'MQTT切换broker: #' + (_mqttIdx % MQTT_URLS.length));
+        connectRegistry();
+      }
+    }, 10000);
+  });
 
   state.regMqtt.on('message', (topic, msg) => {
     const name = topic.replace('voice-registry/', '');

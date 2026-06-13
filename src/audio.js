@@ -253,8 +253,66 @@ export function updateMicUI(on) {
   label.style.color = on ? 'var(--accent)' : 'var(--danger)';
 }
 
+// ── 连接状态管理 ──
+function setConnState(st) {
+  const prev = state._connState;
+  state._connState = st;
+  addLog('conn', '状态: ' + prev + ' → ' + st);
+  statusLog(st === 'connected' ? 'LiveKit已连接' : st === 'reconnecting' ? '重连中...' : '已断开');
+  // 更新状态灯
+  const dot = $('conn-dot');
+  if (dot) {
+    dot.style.display = (st === 'disconnected' && !state.currentRoom) ? 'none' : 'inline-block';
+    const colors = { connected: '#16a34a', reconnecting: '#ea580c', connecting: '#ea580c', disconnected: '#e04949' };
+    dot.style.background = colors[st] || '#e04949';
+  }
+}
+
+// 指数退避重连
+const MAX_RECONNECT_DELAY = 30000;
+const BASE_RECONNECT_DELAY = 1000;
+
+export async function reconnectLiveKit() {
+  if (state._lkReconnecting || !state._lkRoomName || !state.currentRoom) return;
+  state._lkReconnecting = true;
+  state._lkReconnectAttempts++;
+  setConnState('reconnecting');
+
+  const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, state._lkReconnectAttempts - 1), MAX_RECONNECT_DELAY);
+  const jitter = Math.random() * 1000;
+  addLog('conn', '⏳ 重连 #' + state._lkReconnectAttempts + ' — 等待 ' + Math.round((delay + jitter) / 1000) + 's');
+
+  await new Promise(r => setTimeout(r, delay + jitter));
+
+  try {
+    // 清理旧房间
+    if (state._lkRoom) {
+      try { state._lkRoom.disconnect(); } catch (e) {}
+      state._lkRoom = null;
+    }
+    // 清理旧的 intervals
+    stopPositionSync();
+    stopDucking();
+    state._dcIntervals = [];
+
+    // 重新连接
+    await connectLiveKit(state._lkRoomName);
+    addLog('conn', '✅ 重连成功！');
+    toast('已重新连接');
+    state._lkReconnecting = false;
+    state._lkReconnectAttempts = 0;
+  } catch (e) {
+    addLog('err', '❌ 重连失败: ' + e.message);
+    state._lkReconnecting = false;
+    // 继续尝试
+    reconnectLiveKit();
+  }
+}
+
 // ── 5e. 连接LiveKit ──
 export async function connectLiveKit(roomName) {
+  state._lkRoomName = roomName;  // 保存房间名，断线重连用
+  setConnState('connecting');
   statusLog('LiveKit连接中...');
   addLog('conn', '开始连接 LiveKit, room=' + roomName + ' peer=' + (state.myPeerId || '?').slice(0,8));
 
@@ -304,7 +362,8 @@ export async function connectLiveKit(roomName) {
     addLog('conn', 'JWT已生成');
     await lkRoom.connect(LIVEKIT_URL, jwt);
     addLog('conn', '🔊 LiveKit 已连接');
-    statusLog('LiveKit已连接');
+    setConnState('connected');
+    state._lkReconnectAttempts = 0;  // 重置重连计数
 
     // 发布本地音轨
     const tracks = state.localStream ? state.localStream.getAudioTracks() : [];
@@ -368,6 +427,20 @@ export async function connectLiveKit(roomName) {
         _snaps: [{ x: ROOM_SIZE / 2, y: ROOM_SIZE / 2, t: Date.now() }],
       });
       updateRoomCount();
+    });
+
+    // 断线检测 + 自动重连
+    lkRoom.on('disconnected', () => {
+      if (!state._lkRoomName || !state.currentRoom) return;  // 用户主动离开
+      addLog('err', '🔌 LiveKit 已断开！');
+      setConnState('disconnected');
+      stopPositionSync();
+      stopDucking();
+      state._dcIntervals = [];
+      // 自动重连
+      if (!state._lkReconnecting) {
+        reconnectLiveKit();
+      }
     });
 
     startPositionSync(lkRoom);
