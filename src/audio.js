@@ -520,12 +520,17 @@ export async function connectLiveKit(roomName) {
     }, 1000);
 
     const subInterval = setInterval(() => {
+      // 网络自适应：弱网时缩小可听范围，减轻带宽压力
+      const q = state._qualityLevel;
+      const subIn  = q === 'bad' ? 150 : q === 'poor' ? 280 : SUBSCRIBE_IN;
+      const subOut = q === 'bad' ? 250 : q === 'poor' ? 380 : UNSUBSCRIBE_OUT;
+
       for (const [pid, p] of state.peers) {
         if (!p._pub) continue;
         const dist = Math.sqrt((p.x - state.myPos.x) ** 2 + (p.y - state.myPos.y) ** 2);
         // 滞后阈值：进入近→订阅，离开远→取消，防止边界反复横跳
         const wasSubbed = p._subbed === true;
-        const shouldSub = wasSubbed ? dist <= UNSUBSCRIBE_OUT : dist <= SUBSCRIBE_IN;
+        const shouldSub = wasSubbed ? dist <= subOut : dist <= subIn;
         if (shouldSub !== wasSubbed) {
           try { p._pub.setSubscribed(shouldSub); } catch (e) {}
           p._subbed = shouldSub;
@@ -570,7 +575,7 @@ export function removePeer(pid) {
   updateRoomCount();
 }
 
-// ── 5g. Ducking ──
+// ── 5g. Ducking (非对称平滑) ──
 export function startDucking() {
   if (state.duckTimer) return;
   state.duckTimer = setInterval(() => {
@@ -581,9 +586,11 @@ export function startDucking() {
     }
     for (const [pid, p] of state.peers) {
       if (!p.gainNode) continue;
-      const target = (loudestVol > 10 && p !== loudest) ? 0.3 : 1.0;
+      const target = (loudestVol > 10 && p !== loudest) ? 0.25 : 1.0;
       const cur = p.gainNode.gain.value;
-      p.gainNode.gain.value = cur + (target - cur) * 0.2;
+      // 非对称平滑: 压得快(0.45) 回得慢(0.08)，听觉更自然
+      const speed = target < cur ? 0.45 : 0.08;
+      p.gainNode.gain.value = cur + (target - cur) * speed;
     }
   }, 100);
 }

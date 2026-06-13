@@ -40,6 +40,8 @@ export function startPositionSync(room) {
   let _lastSentX = state.myPos.x;
   let _lastSentY = state.myPos.y;
   let _lastSentTime = 0;
+  let _lastSentName = state.profileName;
+  let _lastNameTime = 0;
 
   const sendInterval = setInterval(() => {
     if (!state.currentRoom || sendLock) return;
@@ -57,16 +59,19 @@ export function startPositionSync(room) {
 
     if (!shouldSend) return;
 
+    // 名字去重：只在变更时或每2秒发一次（供晚加入的 peer）
+    const now = Date.now();
+    const nameChanged = state.profileName !== _lastSentName;
+    const nameRefresh = (now - _lastNameTime) > 2000;
+    const sendName = nameChanged || nameRefresh;
+
     sendLock = true;
     try {
+      const pld = { x: state.myPos.x, y: state.myPos.y, micOn: state.micOn };
+      if (sendName) { pld.name = state.profileName; _lastSentName = state.profileName; _lastNameTime = now; }
       const payload = textEncoder.encode(JSON.stringify({
         channelId: 'pos',
-        payload: {
-          x: state.myPos.x,
-          y: state.myPos.y,
-          micOn: state.micOn,
-          name: state.profileName,
-        },
+        payload: pld,
       }));
       room.localParticipant.publishData(payload, DataPacket_Kind.LOSSY);
       _lastSentX = state.myPos.x;
