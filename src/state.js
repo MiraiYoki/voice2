@@ -131,6 +131,8 @@ const _rawState = {
   _lkReconnectAttempts: 0,     // 重连次数
   _lkLastDataTime: 0,          // 最后收到数据时间 (健康检查)
   _connState: 'disconnected',  // disconnected|connecting|connected|reconnecting
+  _qualityLevel: null,         // good|ok|poor|bad — 连接质量
+  _jwtRefreshTimer: null,      // JWT 自动刷新定时器
 
   // ── 调试日志 ──
   _logs: [],          // [{t,cat,msg}] — 由 utils.js addLog() 填充

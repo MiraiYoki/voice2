@@ -331,6 +331,49 @@ export async function reconnectLiveKit() {
   }
 }
 
+// ── 连接质量监控 ──
+let _qualityTimer = null;
+
+export function startQualityMonitor() {
+  if (_qualityTimer) return;
+  _qualityTimer = setInterval(async () => {
+    if (!state._lkRoom || state._lkRoom.state !== 'connected') return;
+    try {
+      const stats = await state._lkRoom.engine.pcManager?.publisher?.getStats();
+      if (!stats) return;
+      let rtt = 0, lossRate = 0;
+      for (const r of stats.values()) {
+        if (r.type === 'candidate-pair' && r.state === 'succeeded') {
+          rtt = r.currentRoundTripTime ? r.currentRoundTripTime * 1000 : rtt;
+        }
+        if (r.type === 'inbound-rtp' && r.kind === 'audio') {
+          lossRate = r.packetsLost / (r.packetsReceived + r.packetsLost) * 100 || 0;
+        }
+      }
+      // 质量评级
+      let lvl;
+      if (!rtt || rtt < 100 && lossRate < 2) lvl = 'good';
+      else if (rtt < 300 && lossRate < 5) lvl = 'ok';
+      else if (rtt < 500 && lossRate < 10) lvl = 'poor';
+      else lvl = 'bad';
+
+      if (state._qualityLevel !== lvl) {
+        state._qualityLevel = lvl;
+        const dot = $('conn-dot');
+        if (dot) {
+          const colors = { good: '#16a34a', ok: '#ca8a04', poor: '#ea580c', bad: '#e04949' };
+          dot.style.background = colors[lvl];
+          dot.title = { good: '连接良好', ok: '网络一般', poor: '网络较差', bad: '即将断连' }[lvl];
+        }
+      }
+    } catch (e) { /* stats may fail silently */ }
+  }, 3000);
+}
+
+export function stopQualityMonitor() {
+  if (_qualityTimer) { clearInterval(_qualityTimer); _qualityTimer = null; }
+}
+
 // ── 5e. 连接LiveKit ──
 export async function connectLiveKit(roomName) {
   state._lkRoomName = roomName;  // 保存房间名，断线重连用
@@ -458,6 +501,7 @@ export async function connectLiveKit(roomName) {
       setConnState('disconnected');
       stopPositionSync();
       stopDucking();
+      stopQualityMonitor();
       state._dcIntervals = [];
       // 自动重连
       if (!state._lkReconnecting) {
@@ -491,6 +535,14 @@ export async function connectLiveKit(roomName) {
     state._dcIntervals.push(subInterval);
 
     startDucking();
+    startQualityMonitor();
+
+    // JWT 自动刷新 (23小时后重建连接)
+    const refreshMs = 23 * 3600 * 1000;
+    state._jwtRefreshTimer = setTimeout(() => {
+      addLog('conn', '🔄 JWT即将过期，触发重连刷新');
+      reconnectLiveKit();
+    }, refreshMs);
 
     $('game-bar').style.display = 'flex';
     $('map-wrap').style.display = 'block';

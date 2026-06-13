@@ -5,7 +5,7 @@
 import { state } from './state.js';
 import { $, toast, simpleHash, showPanel, renderAllLogs } from './utils.js';
 import { ROOM_SIZE } from './config.js';
-import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking } from './audio.js';
+import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking, stopQualityMonitor } from './audio.js';
 import { stopPositionSync } from './netcode.js';
 import { renderRoomList } from './registry.js';
 
@@ -54,9 +54,11 @@ export function leaveRoom() {
   for (const pid of state.peers.keys()) { removePeer(pid); }
   state.peers.clear();
 
-  // 停同步 & ducking
+  // 停同步 & ducking & 质量监控 & JWT定时器
   stopPositionSync();
   stopDucking();
+  stopQualityMonitor();
+  if (state._jwtRefreshTimer) { clearTimeout(state._jwtRefreshTimer); state._jwtRefreshTimer = null; }
 
   // 重置状态
   state.currentRoom = null;

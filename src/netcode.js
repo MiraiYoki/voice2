@@ -34,12 +34,29 @@ export function sendProfile(room) {
   } catch (e) { /* ignore */ }
 }
 
-// ── 8b. 启动位置同步 (发 + 收) ──
+// ── 8b. 启动位置同步 (发 + 收) — 自适应频率 ──
 export function startPositionSync(room) {
   _room = room;
-  // 发送: 50ms 间隔 + sendLock
+  let _lastSentX = state.myPos.x;
+  let _lastSentY = state.myPos.y;
+  let _lastSentTime = 0;
+
   const sendInterval = setInterval(() => {
     if (!state.currentRoom || sendLock) return;
+
+    const dx = Math.abs(state.myPos.x - _lastSentX);
+    const dy = Math.abs(state.myPos.y - _lastSentY);
+    const moved = Math.sqrt(dx * dx + dy * dy);
+    const sinceLast = Date.now() - _lastSentTime;
+
+    // 自适应：移动大→50ms, 移动小→100ms, 静止→500ms
+    let shouldSend = false;
+    if (moved > 2) shouldSend = true;               // 明显移动，每 tick 都发
+    else if (moved > 0.5 && sinceLast >= 100) shouldSend = true;  // 慢移动 100ms
+    else if (sinceLast >= 500) shouldSend = true;    // 静止保活 500ms
+
+    if (!shouldSend) return;
+
     sendLock = true;
     try {
       const payload = textEncoder.encode(JSON.stringify({
@@ -52,6 +69,9 @@ export function startPositionSync(room) {
         },
       }));
       room.localParticipant.publishData(payload, DataPacket_Kind.LOSSY);
+      _lastSentX = state.myPos.x;
+      _lastSentY = state.myPos.y;
+      _lastSentTime = Date.now();
     } catch (e) { /* ignore */ }
     finally { sendLock = false; }
   }, 50);
