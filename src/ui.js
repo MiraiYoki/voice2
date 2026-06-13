@@ -78,12 +78,13 @@ export function leaveRoom() {
   state.isRoomCreator = false;
   state.myPeerId = null;
 
-  // 关麦克风
+  // 关麦克风 + 恢复音乐模式
   if (state.localStream) {
     try { state.localStream.getAudioTracks().forEach(t => t.stop()); } catch (e) {}
     state.localStream = null;
     updateMicUI(false);
   }
+  if (navigator.audioSession) { try { navigator.audioSession.type = 'playback'; } catch(e) {} }
 
   // 关 AudioContext
   if (state.audioCtx) { try { state.audioCtx.close(); } catch (e) {} state.audioCtx = null; }

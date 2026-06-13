@@ -290,13 +290,11 @@ export async function toggleMic() {
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
-      // iOS: getUserMedia 后强制切回 playback 模式保立体声
-      if (navigator.audioSession) {
-        try { navigator.audioSession.type = 'playback'; } catch(e) {}
-      }
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       state.micOn = true;
       updateMicUI(true);
+      // iOS: 麦克风开启→通话模式
+      if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
       addLog('audio', '🎤 麦克风已开启');
 
       if (state._lkRoom && state._lkRoom.state === 'connected') {
@@ -317,20 +315,23 @@ export async function toggleMic() {
     // 已有流：翻转 enabled (SkyOffice 同款，0ms 响应)
     const track = state.localStream.getAudioTracks()[0];
     if (!track || track.readyState === 'ended') {
-      // 音轨失效，重建
       addLog('audio', '⚠️ 音轨已失效，重建中');
       state.localStream.getAudioTracks().forEach(t => t.stop());
       state.localStream = null;
       state.micOn = false;
       updateMicUI(false);
-      state.micBusy = false;  // 释放锁后重试
+      state.micBusy = false;
       toggleMic();
       return;
     }
     state.micOn = !state.micOn;
     track.enabled = state.micOn;
     updateMicUI(state.micOn);
-    addLog('audio', state.micOn ? '🎤 麦克风已开启' : '🔇 麦克风已关闭');
+    // iOS: 关麦→音乐模式(立体声) 开麦→通话模式
+    if (navigator.audioSession) {
+      try { navigator.audioSession.type = state.micOn ? 'play-and-record' : 'playback'; } catch(e) {}
+    }
+    addLog('audio', state.micOn ? '🎤 麦克风已开启' : '🔇 麦克风已关闭(立体声已恢复)');
   } catch (e) {
     toast('麦克风切换失败');
     addLog('err', '麦克风切换失败: ' + e.message);
@@ -462,10 +463,9 @@ export async function connectLiveKit(roomName) {
   if (!state.localStream) {
     try {
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
-      // iOS: getUserMedia 后强制切回 playback 模式保立体声
-      if (navigator.audioSession) {
-        try { navigator.audioSession.type = 'playback'; } catch(e) {}
-      }
+      state.micOn = true;
+      // iOS: 麦克风开启→通话模式
+      if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
 
