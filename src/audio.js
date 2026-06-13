@@ -329,15 +329,15 @@ export async function toggleMic() {
         if (navigator.audioSession) { try { navigator.audioSession.type = 'playback'; } catch(e) {} }
         addLog('audio', '🔇 iOS关麦: 流已释放, 立体声恢复');
       } else {
-        // 开麦: 重新获取 + 发布 → play-and-record
+        // 开麦: 先切回 play-and-record → getUserMedia → publish
+        if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
         if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
         await new Promise(r => setTimeout(r, 150));
         state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
         if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
         state.micOn = true;
         updateMicUI(true);
-        if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
-        addLog('audio', '🎤 iOS开麦: play-and-record');
+        addLog('audio', '🎤 iOS开麦: 立体声已恢复(关麦时)');
         if (state._lkRoom && state._lkRoom.state === 'connected') {
           const tracks = state.localStream.getAudioTracks();
           if (tracks.length > 0 && tracks[0].readyState === 'live') {
