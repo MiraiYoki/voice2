@@ -289,12 +289,12 @@ export async function toggleMic() {
     if (!state.localStream) {
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
+      // iOS: 先切回 play-and-record 再拿麦克风
+      if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       state.micOn = true;
       updateMicUI(true);
-      // iOS: 麦克风开启→通话模式
-      if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
       addLog('audio', '🎤 麦克风已开启');
 
       if (state._lkRoom && state._lkRoom.state === 'connected') {
@@ -494,10 +494,9 @@ export async function connectLiveKit(roomName) {
   // 自动获取麦克风
   if (!state.localStream) {
     try {
+      if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
       state.micOn = true;
-      // iOS: 麦克风开启→通话模式
-      if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
 
