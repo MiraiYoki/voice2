@@ -137,6 +137,37 @@ export function wireUI() {
   $('room-back').onclick = () => showPanel('home-panel');
   $('room-search').oninput = () => renderRoomList();
 
+  // 首页 → 立体声测试 (无麦克风, 纯净 AudioContext)
+  let _preTestCleanup = null;
+  $('btn-stereo-pre').onclick = () => {
+    if (_preTestCleanup) { _preTestCleanup(); _preTestCleanup = null; return; }
+    const ctx = new AudioContext();
+    const sr = ctx.sampleRate;
+    const dur = 1.0;
+    const samples = sr * dur;
+    // stereo WAV: 左声道440Hz 1秒, 右声道880Hz 1秒, 交替
+    const buf = ctx.createBuffer(2, samples * 2, sr);
+    for (let i = 0; i < samples; i++) {
+      buf.getChannelData(0)[i] = 0.12 * Math.sin(2 * Math.PI * 440 * i / sr);
+      buf.getChannelData(1)[i] = 0;
+      buf.getChannelData(0)[samples + i] = 0;
+      buf.getChannelData(1)[samples + i] = 0.12 * Math.sin(2 * Math.PI * 880 * (i / sr));
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(ctx.destination);
+    src.start();
+    const d = ctx.destination;
+    const a = navigator.audioSession;
+    $('stereo-pre-status').textContent = '▶ 左1s440Hz 右1s880Hz | ch=' + d.channelCount + '/' + d.maxChannelCount + (a ? ' sess='+a.type : '');
+    _preTestCleanup = () => {
+      try { src.stop(); src.disconnect(); ctx.close(); } catch(e) {}
+      _preTestCleanup = null;
+      $('stereo-pre-status').textContent = '进房间前测试左右声道';
+    };
+  };
+
   // 首页 → 角色设置
   $('btn-profile').onclick = () => { showPanel('profile-panel'); $('profile-name').value = state.profileName; };
   $('profile-back').onclick = () => {
