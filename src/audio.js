@@ -144,15 +144,55 @@ export async function setupAudioNodes(pid, remoteStream) {
   info._diagTimer = diagTimer;  // 存储以便 removePeer 清理
 
   if (isIOS) {
-    // iOS Safari 不支持 HRTF PannerNode → 用 StereoPanner (左右) + Gain (距离)
-    const stereo = state.audioCtx.createStereoPanner();
+    // v1.0同款: StereoPanner(atan2方向) → PannerNode(距离,HRTF自动降级) → Gain
+    const stereoPan = state.audioCtx.createStereoPanner();
+    const panner = state.audioCtx.createPanner();
     const gain = state.audioCtx.createGain();
-    gain.gain.value = 1;
-    src.connect(stereo).connect(gain).connect(state.audioCtx.destination);
-    info._stereoPanner = stereo;
+
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = PANNER_REF_DISTANCE;
+    panner.maxDistance = PANNER_MAX_DISTANCE;
+    panner.rolloffFactor = PANNER_ROLLOFF_FACTOR;
+    panner.coneOuterAngle = 360;
+    panner.coneInnerAngle = 360;
+    panner.coneOuterGain = 1;
+
+    const rx = info.x - state.myPos.x;
+    const ry = info.y - state.myPos.y;
+    if (panner.positionX) {
+      panner.positionX.setValueAtTime(rx, 0);
+      panner.positionZ.setValueAtTime(ry, 0);
+    } else {
+      panner.setPosition(rx, 0, ry);
+    }
+
+    src.connect(stereoPan);
+    stereoPan.connect(panner);
+    panner.connect(gain);
+
+    const volA = state.audioCtx.createAnalyser();
+    volA.fftSize = 256;
+    gain.connect(volA);
+    volA.connect(state.audioCtx.destination);
+
+    info.source = src;
+    info._stereoPanner = stereoPan;
+    info.panner = panner;
     info.gainNode = gain;
     info._isIOS = true;
-    addLog('audio', 'iOS模式: StereoPanner(左右) + 距离衰减');
+    info._volBuf = new Uint8Array(volA.frequencyBinCount);
+    info.smoothedVol = 0;
+
+    (function tick() {
+      if (!state.peers.has(pid)) return;
+      volA.getByteFrequencyData(info._volBuf);
+      const avg = info._volBuf.reduce((a, b) => a + b, 0) / info._volBuf.length;
+      info.smoothedVol = info.smoothedVol * 0.6 + avg * 0.4;
+      requestAnimationFrame(tick);
+    })();
+
+    addLog('audio', 'iOS v1.0管线: StereoPanner→Panner→Gain | ' + pid.slice(0,8));
   } else {
     const panner = state.audioCtx.createPanner();
     const gain = state.audioCtx.createGain();
@@ -215,14 +255,19 @@ export function updateSpatialAudio() {
     const tNow = state.audioCtx.currentTime;
 
     if (p._isIOS) {
-      const dist = Math.sqrt(rx * rx + ry * ry);
-      // 自然衰减曲线: vol=1/(1+dist/120), 100px→0.55, 300px→0.29, 500px→0.19
-      const vol = Math.exp(-dist / MOBILE_FALLOFF);
-      if (p.gainNode) p.gainNode.gain.setTargetAtTime(vol, tNow, 0.05);
-      // 左右声像
+      // v1.0同款: atan2声像 + PannerNode处理距离
       if (p._stereoPanner) {
-        const pan = Math.max(-1, Math.min(1, rx / 200));
-        p._stereoPanner.pan.setTargetAtTime(pan, tNow, 0.02);
+        const dx = rx, dz = ry;
+        p._stereoPanner.pan.setTargetAtTime(
+          Math.tanh(Math.atan2(dx, Math.abs(dz) + 0.01) * 2), tNow, 0.02);
+      }
+      if (p.panner) {
+        if (p.panner.positionX) {
+          p.panner.positionX.setTargetAtTime(rx, tNow, 0.02);
+          p.panner.positionZ.setTargetAtTime(ry, tNow, 0.02);
+        } else {
+          p.panner.setPosition(rx, 0, ry);
+        }
       }
     } else if (p.panner) {
       if (p.panner.positionX) {
