@@ -218,50 +218,6 @@ export function updateSpatialAudio() {
   }
 }
 
-// ── 本地噪声门 ──
-const NOISE_FLOOR = 8; // 低于此音量→判定为底噪 (浏览器降噪已开, 阈值可放低)
-
-function applyNoiseGate(rawStream) {
-  if (!state.audioCtx) return rawStream;
-  const ctx = state.audioCtx;
-  const src = ctx.createMediaStreamSource(rawStream);
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 256;
-  const gate = ctx.createGain();
-  const dest = ctx.createMediaStreamDestination();
-
-  src.connect(analyser);
-  src.connect(gate);
-  gate.connect(dest);
-
-  const buf = new Uint8Array(analyser.frequencyBinCount);
-  const gatedStream = dest.stream;
-  let gated = false;
-  let dead = false;
-  const tick = () => {
-    if (dead) return;
-    if (state.localStream !== gatedStream) {
-      // 流已被替换，清理并停止
-      dead = true;
-      try { src.disconnect(); gate.disconnect(); analyser.disconnect(); } catch(e) {}
-      return;
-    }
-    analyser.getByteFrequencyData(buf);
-    const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
-    const target = avg > NOISE_FLOOR ? 1.0 : 0.08;
-    const speed = target > gate.gain.value ? 0.3 : 0.08;
-    gate.gain.value += (target - gate.gain.value) * speed;
-    if (target > 0.5 && !gated) { gated = true; }
-    requestAnimationFrame(tick);
-  };
-  tick();
-
-  // 保存原始流引用，关麦时释放
-  state._rawStream = rawStream;
-  addLog('audio', '🔇 噪声门已启用, 阈值=' + NOISE_FLOOR);
-  return gatedStream;
-}
-
 // ── 5d. 推讲 (toggleMic) ──
 export async function toggleMic() {
   if (state.micBusy) return;
@@ -274,13 +230,7 @@ export async function toggleMic() {
           state._lkRoom.localParticipant.unpublishTrack(state._lkRoom.localParticipant.getTrackPublication('mic')?.track);
         } catch (e) {}
       }
-      // 释放噪声门处理后的流
       state.localStream.getAudioTracks().forEach(t => t.stop());
-      // 释放原始 getUserMedia 流（否则下次获取麦克风会失败）
-      if (state._rawStream) {
-        state._rawStream.getAudioTracks().forEach(t => t.stop());
-        state._rawStream = null;
-      }
       state.localStream = null;
       updateMicUI(false);
       addLog('audio', '🔇 麦克风已关闭');
@@ -289,7 +239,6 @@ export async function toggleMic() {
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
-      state.localStream = applyNoiseGate(state.localStream);  // 噪声门
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       updateMicUI(true);
@@ -445,14 +394,13 @@ export async function connectLiveKit(roomName) {
   if (!state.localStream) {
     try {
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
-      state.localStream = applyNoiseGate(state.localStream);  // 噪声门
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
 
-      // 自检本地麦克风音量 (读原始流，不经噪声门)
-      if (state.audioCtx && state._rawStream) {
-        const selfSrc = state.audioCtx.createMediaStreamSource(state._rawStream);
+      // 自检本地麦克风音量
+      if (state.audioCtx) {
+        const selfSrc = state.audioCtx.createMediaStreamSource(state.localStream);
         const selfA = state.audioCtx.createAnalyser();
         selfA.fftSize = 256;
         selfSrc.connect(selfA);

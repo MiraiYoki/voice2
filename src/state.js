@@ -96,7 +96,6 @@ const _rawState = {
 
   // ── 音频 ──
   localStream: null,
-  _rawStream: null,    // getUserMedia 原始流 (关麦时需释放)
   audioCtx: null,
   micOn: true,
   micBusy: false,
