@@ -218,6 +218,42 @@ export function updateSpatialAudio() {
   }
 }
 
+// ── 本地噪声门 ──
+const NOISE_FLOOR = 12; // 低于此音量→判定为底噪
+
+function applyNoiseGate(rawStream) {
+  if (!state.audioCtx) return rawStream;
+  const ctx = state.audioCtx;
+  const src = ctx.createMediaStreamSource(rawStream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  const gate = ctx.createGain();
+  const dest = ctx.createMediaStreamDestination();
+
+  src.connect(analyser);
+  src.connect(gate);
+  gate.connect(dest);
+
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  let gated = false;
+  const tick = () => {
+    if (state.localStream !== gatedStream) return; // 流已更换，停止
+    analyser.getByteFrequencyData(buf);
+    const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
+    const target = avg > NOISE_FLOOR ? 1.0 : 0.01;
+    // 平滑门控：开快关慢
+    const speed = target > gate.gain.value ? 0.3 : 0.06;
+    gate.gain.value += (target - gate.gain.value) * speed;
+    if (target > 0.5 && !gated) { gated = true; /* 首次开，不记日志 */ }
+    requestAnimationFrame(tick);
+  };
+  tick();
+
+  const gatedStream = dest.stream;
+  addLog('audio', '🔇 噪声门已启用, 阈值=' + NOISE_FLOOR);
+  return gatedStream;
+}
+
 // ── 5d. 推讲 (toggleMic) ──
 export async function toggleMic() {
   if (state.micBusy) return;
@@ -238,7 +274,8 @@ export async function toggleMic() {
       // 开麦：获取新流 + 发布到 LiveKit
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
-      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false, channelCount: 1 } });
+      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
+      state.localStream = applyNoiseGate(state.localStream);  // 噪声门
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       updateMicUI(true);
@@ -393,7 +430,8 @@ export async function connectLiveKit(roomName) {
   // 自动获取麦克风
   if (!state.localStream) {
     try {
-      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false, channelCount: 1 } });
+      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
+      state.localStream = applyNoiseGate(state.localStream);  // 噪声门
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
