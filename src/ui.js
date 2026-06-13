@@ -101,8 +101,8 @@ function resizeAndSetAvatar(file) {
     state.profileAvatar = thumb;
     localStorage.setItem('voice-profile-avatar', thumb);
     if (state.avatarImg) state.avatarImg.src = thumb;
-    $('avatar-preview').innerHTML = '<img src="' + thumb + '" style="width:100%;height:100%;object-fit:cover">';
-    $('home-avatar-ring').innerHTML = '<img src="' + thumb + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+    $('avatar-preview').innerHTML = '<img src="' + thumb + '" alt="头像预览" style="width:100%;height:100%;object-fit:cover">';
+    $('home-avatar-ring').innerHTML = '<img src="' + thumb + '" alt="头像" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
     $('self-color').style.backgroundImage = 'url(' + thumb + ')';
     // 头像换了就发给所有人
     if (state._lkRoom && state.currentRoom) {

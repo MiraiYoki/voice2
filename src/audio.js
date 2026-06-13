@@ -235,6 +235,7 @@ function applyNoiseGate(rawStream) {
   gate.connect(dest);
 
   const buf = new Uint8Array(analyser.frequencyBinCount);
+  const gatedStream = dest.stream;
   let gated = false;
   const tick = () => {
     if (state.localStream !== gatedStream) return; // 流已更换，停止
@@ -249,7 +250,6 @@ function applyNoiseGate(rawStream) {
   };
   tick();
 
-  const gatedStream = dest.stream;
   addLog('audio', '🔇 噪声门已启用, 阈值=' + NOISE_FLOOR);
   return gatedStream;
 }

@@ -56,8 +56,8 @@ function init() {
     state.profileAvatar = '';
   }
   if (state.profileAvatar) {
-    $('home-avatar-ring').innerHTML = '<img src="' + state.profileAvatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
-    $('avatar-preview').innerHTML = '<img src="' + state.profileAvatar + '" style="width:100%;height:100%;object-fit:cover">';
+    $('home-avatar-ring').innerHTML = '<img src="' + state.profileAvatar + '" alt="头像" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+    $('avatar-preview').innerHTML = '<img src="' + state.profileAvatar + '" alt="头像预览" style="width:100%;height:100%;object-fit:cover">';
     $('self-color').style.backgroundImage = 'url(' + state.profileAvatar + ')';
   }
 
