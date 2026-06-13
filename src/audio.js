@@ -12,6 +12,7 @@ import {
   LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET,
   ROOM_SIZE, COLORS,
   PANNER_REF_DISTANCE, PANNER_MAX_DISTANCE, PANNER_ROLLOFF_FACTOR, EARSHOT_RADIUS,
+  MOBILE_FALLOFF,
 } from './config.js';
 
 // ── 5a. JWT生成 (浏览器WebCrypto) ──
@@ -216,7 +217,7 @@ export function updateSpatialAudio() {
     if (p._isIOS) {
       const dist = Math.sqrt(rx * rx + ry * ry);
       // 自然衰减曲线: vol=1/(1+dist/120), 100px→0.55, 300px→0.29, 500px→0.19
-      const vol = 1 / (1 + dist / 120);
+      const vol = Math.exp(-dist / MOBILE_FALLOFF);
       if (p.gainNode) p.gainNode.gain.setTargetAtTime(vol, tNow, 0.05);
       // 左右声像
       if (p._stereoPanner) {

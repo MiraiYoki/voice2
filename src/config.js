@@ -28,10 +28,11 @@ export { LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET } from './secrets.js';
 export const MOVE_SPEED = 2.2;
 
 // 空间音频 (对标 spatial-audio: 像素坐标直传)
-export const PANNER_REF_DISTANCE   = 100;
-export const PANNER_MAX_DISTANCE   = 500;
-export const PANNER_ROLLOFF_FACTOR = 2;
-export const EARSHOT_RADIUS = 500;  // 可听范围 (同 maxDistance)
+export const PANNER_REF_DISTANCE   = 120;
+export const PANNER_MAX_DISTANCE   = 600;
+export const PANNER_ROLLOFF_FACTOR = 1.6;
+export const EARSHOT_RADIUS = 600;
+export const MOBILE_FALLOFF = 200;  // 移动端 exp(-dist/200)
 
 // 选择性订阅滞后阈值 (防边界抖动)
 // 订阅范围需大于音频衰减范围, 确保衰减到极小后オ切断
