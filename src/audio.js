@@ -248,8 +248,8 @@ function applyNoiseGate(rawStream) {
     }
     analyser.getByteFrequencyData(buf);
     const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
-    const target = avg > NOISE_FLOOR ? 1.0 : 0.01;
-    const speed = target > gate.gain.value ? 0.3 : 0.06;
+    const target = avg > NOISE_FLOOR ? 1.0 : 0.08;
+    const speed = target > gate.gain.value ? 0.3 : 0.08;
     gate.gain.value += (target - gate.gain.value) * speed;
     if (target > 0.5 && !gated) { gated = true; }
     requestAnimationFrame(tick);
