@@ -42,9 +42,19 @@ export function leaveRoom() {
   if (!state.currentRoom) return;
   state._closing = true;  // 阻止 toggleMic 等异步操作
 
-  // 清理房间
-  if (state.regMqtt && state.isRoomCreator) {
-    state.regMqtt.publish('voice-registry/' + state.currentRoom, '', { retain: true });
+  // 清理房间 — 任何人退出都检查，最后一个人负责销毁
+  if (state.regMqtt) {
+    const isLast = state.peers.size === 0;
+    if (isLast && !confirm('你是最后一个在线的人，退出后房间将消失。确定退出？')) return;
+    if (isLast) {
+      state.regMqtt.publish('voice-registry/' + state.currentRoom, '', { retain: true });
+      addLog('conn', '🏚️ 最后一人退出，房间已销毁');
+    } else {
+      const info = state.rooms.get(state.currentRoom);
+      state.regMqtt.publish('voice-registry/' + state.currentRoom,
+        JSON.stringify({ hasPassword: info?.hasPassword || false, memberCount: state.peers.size }),
+        { retain: true });
+    }
   }
 
   // 断开 LiveKit (先标记离开，防止触发自动重连)

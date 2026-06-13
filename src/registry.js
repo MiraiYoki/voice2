@@ -122,9 +122,9 @@ export function updateRoomCount() {
   $('status').innerHTML = '<span class="room-badge"><span class="dot"></span>'
     + state.currentRoom + ' · ' + count + '人</span>';
 
-  // 房主更新 MQTT
-  if (state.isRoomCreator) {
-    const info = state.rooms.get(state.currentRoom);
+  // 所有人更新 MQTT (不只是房主), 保活刷新
+  const info = state.rooms.get(state.currentRoom);
+  if (state.regMqtt?.connected) {
     state.regMqtt.publish('voice-registry/' + state.currentRoom,
       JSON.stringify({ hasPassword: info?.hasPassword || false, memberCount: count }),
       { retain: true });
