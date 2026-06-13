@@ -10,8 +10,7 @@
   },
   "dependencies": {
     "livekit-client": "^2.9.0",
-    "mqtt": "^5.10.3",
-    "nipplejs": "^1.0.4"
+    "mqtt": "^5.10.3"
   },
   "devDependencies": {
     "vite": "^6.3.0"

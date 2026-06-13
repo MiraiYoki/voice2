@@ -32,33 +32,54 @@ function updateInputDir() {
   state.inputActive = len > 0.01;
 }
 
-// ── 7b. 摇杆 (nipplejs: Canvas渐变光环, 触摸+鼠标) ──
-import nipplejs from 'nipplejs';
-
+// ── 7b. 摇杆 (移动端 touch + 桌面端 mouse) ──
 export function setupJoystick() {
-  const zone = $('joystick-zone');
-  if (!zone) return;
+  const joy = $('joystick'), stick = $('joystick-stick');
+  state.dom.joystick = joy;
+  state.dom.stick = stick;
+  if (!joy || !stick) return;
 
-  const manager = nipplejs.create({
-    zone,
-    mode: 'static',
-    position: { left: '50%', top: '50%' },
-    color: '#9b4dff',
-    size: 120,
-    threshold: 0.15,
-  });
+  const maxR = 40;
+  let active = false;
 
-  manager.on('move', (evt, data) => {
-    state.inputDir.x = data.vector.x;
-    state.inputDir.y = -data.vector.y; // nipplejs Y轴向上为正
-    state.inputActive = data.distance > 8;
-  });
+  function move(e) {
+    const t = e.touches ? e.touches[0] : e;
+    const rect = joy.getBoundingClientRect();
+    let dx = t.clientX - (rect.left + rect.width / 2);
+    let dy = t.clientY - (rect.top + rect.height / 2);
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > maxR) { dx = dx / dist * maxR; dy = dy / dist * maxR; }
+    stick.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    if (dist > 8) {
+      joy.classList.add('active');
+      state.inputDir.x = dx / maxR;
+      state.inputDir.y = dy / maxR;
+      state.inputActive = true;
+    } else {
+      joy.classList.remove('active');
+      state.inputDir.x = 0;
+      state.inputDir.y = 0;
+      state.inputActive = false;
+    }
+  }
 
-  manager.on('end', () => {
+  function up() {
+    stick.style.transform = 'translate(0,0)';
+    joy.classList.remove('active');
     state.inputDir.x = 0;
     state.inputDir.y = 0;
     state.inputActive = false;
-  });
+  }
+
+  // Touch
+  joy.addEventListener('touchstart', e => { e.preventDefault(); active = true; move(e); }, { passive: false });
+  joy.addEventListener('touchmove',  e => { e.preventDefault(); if (active) move(e); }, { passive: false });
+  joy.addEventListener('touchend',   e => { e.preventDefault(); active = false; up(); }, { passive: false });
+  joy.addEventListener('touchcancel', e => { active = false; up(); });
+  // Mouse (桌面)
+  joy.addEventListener('mousedown', e => { e.preventDefault(); active = true; move(e); });
+  document.addEventListener('mousemove', e => { if (active) move(e); });
+  document.addEventListener('mouseup', e => { active = false; up(); });
 }
 
 // ── 7c. 移动tick (16ms ~60fps) ──

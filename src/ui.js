@@ -139,6 +139,7 @@ export function wireUI() {
   $('btn-find-rooms').onclick = () => { showPanel('room-panel'); toast('房间数: ' + state.rooms.size); renderRoomList(); };
   $('room-back').onclick = () => showPanel('home-panel');
   $('room-search').oninput = () => renderRoomList();
+  $('btn-refresh-rooms').onclick = () => { toast('刷新中...'); renderRoomList(); };
 
   // 首页 → 角色设置
   $('btn-profile').onclick = () => { showPanel('profile-panel'); $('profile-name').value = state.profileName; };
