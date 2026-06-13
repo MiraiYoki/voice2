@@ -221,17 +221,57 @@ function wireStereoTest() {
   }
 
   function getCtx() {
-    // 独立 AudioContext，不受 app 通话模式影响
     const ctx = new AudioContext();
     if (ctx.state === 'suspended') ctx.resume();
+    // 强制 playback 模式
+    if (navigator.audioSession) {
+      try { navigator.audioSession.type = 'playback'; } catch(e) {}
+    }
     return ctx;
   }
 
   function diagInfo(ctx) {
     const d = ctx.destination;
     const a = navigator.audioSession;
-    return 'state=' + ctx.state + ' ch=' + d.channelCount + '/' + d.maxChannelCount
-      + (a ? ' session=' + (a.type || '?') : '');
+    const mic = state.localStream ? 'mic=on' : 'mic=off';
+    return mic + ' ch=' + d.channelCount + '/' + d.maxChannelCount
+      + (a ? ' sess=' + (a.type || '?') : '');
+  }
+
+  // 测试: HTMLAudioElement 播放嵌入立体声 (绕过WebAudio, 最接近系统层)
+  function test_htmlAudio() {
+    stopTest();
+    // 生成一个立体声 WAV 的 data URL: 左440Hz 右880Hz, 各0.1s
+    // 1s左, 1s右交替
+    const sr = 44100;
+    const dur = 2; // 2秒: 1s左 1s右
+    const samples = sr * dur;
+    const buf = new ArrayBuffer(44 + samples * 4); // 16-bit stereo
+    const v = new DataView(buf);
+    // WAV header
+    const w = (s, o) => { for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+    w('RIFF', 0); v.setUint32(4, 36+samples*4, true); w('WAVE', 8);
+    w('fmt ', 12); v.setUint32(16, 16, true); v.setUint16(20, 1, true); // PCM
+    v.setUint16(22, 2, true); v.setUint32(24, sr, true); // stereo, sr
+    v.setUint32(28, sr*4, true); v.setUint16(32, 4, true); v.setUint16(34, 16, true);
+    w('data', 36); v.setUint32(40, samples*4, true);
+    for (let i = 0; i < samples; i++) {
+      const sec = Math.floor(i / sr); // 0 or 1
+      const t = i / sr;
+      const amp = 0.3;
+      const sL = sec === 0 ? Math.sin(2*Math.PI*440*t) * amp : 0;
+      const sR = sec === 1 ? Math.sin(2*Math.PI*880*t) * amp : 0;
+      v.setInt16(44 + i*4, sL * 32767, true);
+      v.setInt16(44 + i*4 + 2, sR * 32767, true);
+    }
+    const blob = new Blob([buf], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    const el = document.createElement('audio');
+    el.src = url;
+    el.loop = true;
+    el.play().catch(e => setStatus('HTMLAudio play失败: ' + e.message));
+    setStatus('HTMLAudio WAV | 左耳1s440Hz 右耳1s880Hz | ' + diagInfo(null));
+    _stereoCleanup = () => { el.pause(); el.remove(); URL.revokeObjectURL(url); };
   }
 
   // 左右轮播器: 每秒切换左右, 播放 beep 音
@@ -346,5 +386,6 @@ function wireStereoTest() {
   $('stereo-test-c')?.addEventListener('click', () => startLRTest('haas'));
   $('stereo-test-d')?.addEventListener('click', () => startLRTest('buffer'));
   $('stereo-test-e')?.addEventListener('click', () => startLRTest('forceDest'));
+  $('stereo-test-f')?.addEventListener('click', test_htmlAudio);
   $('stereo-test-stop')?.addEventListener('click', stopTest);
 }

@@ -245,7 +245,10 @@ export async function toggleMic() {
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
-      // iOS: 不设 play-and-record (会强制通话单声道), 保持音乐模式立体声
+      // iOS: getUserMedia 后强制切回 playback 模式保立体声
+      if (navigator.audioSession) {
+        try { navigator.audioSession.type = 'playback'; } catch(e) {}
+      }
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       state.micOn = true;
       updateMicUI(true);
@@ -414,7 +417,10 @@ export async function connectLiveKit(roomName) {
   if (!state.localStream) {
     try {
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
-      // iOS: 不设 play-and-record (会强制通话单声道), 保持音乐模式立体声
+      // iOS: getUserMedia 后强制切回 playback 模式保立体声
+      if (navigator.audioSession) {
+        try { navigator.audioSession.type = 'playback'; } catch(e) {}
+      }
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
 
