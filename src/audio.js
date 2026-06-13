@@ -312,26 +312,58 @@ export async function toggleMic() {
       return;
     }
 
-    // 已有流：翻转 enabled (SkyOffice 同款，0ms 响应)
-    const track = state.localStream.getAudioTracks()[0];
-    if (!track || track.readyState === 'ended') {
-      addLog('audio', '⚠️ 音轨已失效，重建中');
-      state.localStream.getAudioTracks().forEach(t => t.stop());
-      state.localStream = null;
-      state.micOn = false;
-      updateMicUI(false);
-      state.micBusy = false;
-      toggleMic();
-      return;
+    // iOS: 关麦停流释放麦克风→恢复立体声; 桌面: flip enabled
+    if (isIOS) {
+      if (state.micOn) {
+        // 关麦: 彻底释放流 + 取消发布 → 恢复 playback 立体声
+        if (state._lkRoom && state._lkRoom.state === 'connected') {
+          try {
+            const pub = state._lkRoom.localParticipant.getTrackPublication('mic');
+            if (pub) state._lkRoom.localParticipant.unpublishTrack(pub);
+          } catch(e) {}
+        }
+        state.localStream.getAudioTracks().forEach(t => t.stop());
+        state.localStream = null;
+        state.micOn = false;
+        updateMicUI(false);
+        if (navigator.audioSession) { try { navigator.audioSession.type = 'playback'; } catch(e) {} }
+        addLog('audio', '🔇 iOS关麦: 流已释放, 立体声恢复');
+      } else {
+        // 开麦: 重新获取 + 发布 → play-and-record
+        if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
+        await new Promise(r => setTimeout(r, 150));
+        state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
+        if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
+        state.micOn = true;
+        updateMicUI(true);
+        if (navigator.audioSession) { try { navigator.audioSession.type = 'play-and-record'; } catch(e) {} }
+        addLog('audio', '🎤 iOS开麦: play-and-record');
+        if (state._lkRoom && state._lkRoom.state === 'connected') {
+          const tracks = state.localStream.getAudioTracks();
+          if (tracks.length > 0 && tracks[0].readyState === 'live') {
+            try { await state._lkRoom.localParticipant.publishTrack(new LocalAudioTrack(tracks[0]), { name: 'mic' }); }
+            catch(e) { addLog('err', '发布失败: ' + e.message); }
+          }
+        }
+      }
+    } else {
+      // 桌面/Android: flip enabled (0ms 响应)
+      const track = state.localStream.getAudioTracks()[0];
+      if (!track || track.readyState === 'ended') {
+        addLog('audio', '⚠️ 音轨已失效，重建中');
+        state.localStream.getAudioTracks().forEach(t => t.stop());
+        state.localStream = null;
+        state.micOn = false;
+        updateMicUI(false);
+        state.micBusy = false;
+        toggleMic();
+        return;
+      }
+      state.micOn = !state.micOn;
+      track.enabled = state.micOn;
+      updateMicUI(state.micOn);
+      addLog('audio', state.micOn ? '🎤 麦克风已开启' : '🔇 麦克风已关闭');
     }
-    state.micOn = !state.micOn;
-    track.enabled = state.micOn;
-    updateMicUI(state.micOn);
-    // iOS: 关麦→音乐模式(立体声) 开麦→通话模式
-    if (navigator.audioSession) {
-      try { navigator.audioSession.type = state.micOn ? 'play-and-record' : 'playback'; } catch(e) {}
-    }
-    addLog('audio', state.micOn ? '🎤 麦克风已开启' : '🔇 麦克风已关闭(立体声已恢复)');
   } catch (e) {
     toast('麦克风切换失败');
     addLog('err', '麦克风切换失败: ' + e.message);
