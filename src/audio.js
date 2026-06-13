@@ -138,12 +138,15 @@ export async function setupAudioNodes(pid, remoteStream) {
   info._diagTimer = diagTimer;  // 存储以便 removePeer 清理
 
   if (isIOS) {
+    // iOS Safari 不支持 HRTF PannerNode → 用 StereoPanner (左右) + Gain (距离)
+    const stereo = state.audioCtx.createStereoPanner();
     const gain = state.audioCtx.createGain();
     gain.gain.value = 1;
-    src.connect(gain).connect(state.audioCtx.destination);
+    src.connect(stereo).connect(gain).connect(state.audioCtx.destination);
+    info._stereoPanner = stereo;
     info.gainNode = gain;
     info._isIOS = true;
-    addLog('audio', 'iOS模式: 距离衰减 (无HRTF)');
+    addLog('audio', 'iOS模式: StereoPanner + 距离衰减');
   } else {
     const panner = state.audioCtx.createPanner();
     const gain = state.audioCtx.createGain();
@@ -207,11 +210,17 @@ export function updateSpatialAudio() {
 
     if (p._isIOS) {
       const dist = Math.sqrt(rx * rx + ry * ry);
+      // 距离衰减
       let vol;
       if (dist < PANNER_REF_DISTANCE) vol = 1;
       else if (dist > PANNER_MAX_DISTANCE) vol = 0;
       else vol = 1 - (dist - PANNER_REF_DISTANCE) / (PANNER_MAX_DISTANCE - PANNER_REF_DISTANCE);
       if (p.gainNode) p.gainNode.gain.setTargetAtTime(vol, tNow, 0.02);
+      // 左右声像 (StereoPanner, iOS 可用)
+      if (p._stereoPanner) {
+        const pan = Math.max(-1, Math.min(1, rx / PANNER_MAX_DISTANCE));
+        p._stereoPanner.pan.setTargetAtTime(pan, tNow, 0.02);
+      }
     } else if (p.panner) {
       if (p.panner.positionX) {
         p.panner.positionX.setTargetAtTime(rx, tNow, 0.02);
@@ -570,6 +579,7 @@ export function removePeer(pid) {
   if (p) {
     try { if (p.source) p.source.disconnect(); } catch (e) {}
     try { if (p.panner) p.panner.disconnect(); } catch (e) {}
+    try { if (p._stereoPanner) p._stereoPanner.disconnect(); } catch (e) {}
     try { if (p.gainNode) p.gainNode.disconnect(); } catch (e) {}
     try { if (p._audioEl) { p._audioEl.srcObject = null; p._audioEl.remove(); } } catch (e) {}
     try { if (p._diagTimer) clearInterval(p._diagTimer); } catch (e) {}
