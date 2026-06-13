@@ -219,7 +219,7 @@ export function updateSpatialAudio() {
 }
 
 // ── 本地噪声门 ──
-const NOISE_FLOOR = 12; // 低于此音量→判定为底噪
+const NOISE_FLOOR = 8; // 低于此音量→判定为底噪 (浏览器降噪已开, 阈值可放低)
 
 function applyNoiseGate(rawStream) {
   if (!state.audioCtx) return rawStream;
@@ -450,9 +450,9 @@ export async function connectLiveKit(roomName) {
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
 
-      // 自检本地麦克风音量
-      if (state.audioCtx) {
-        const selfSrc = state.audioCtx.createMediaStreamSource(state.localStream);
+      // 自检本地麦克风音量 (读原始流，不经噪声门)
+      if (state.audioCtx && state._rawStream) {
+        const selfSrc = state.audioCtx.createMediaStreamSource(state._rawStream);
         const selfA = state.audioCtx.createAnalyser();
         selfA.fftSize = 256;
         selfSrc.connect(selfA);
