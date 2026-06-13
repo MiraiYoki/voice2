@@ -65,16 +65,15 @@ input:focus{border-color:var(--accent);}
 .debug-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 .debug-empty{text-align:center;color:var(--text2);font-size:12px;padding:24px;}
 </style>
-  <script type="module" crossorigin src="./assets/index-CH4FRcZQ.js"></script>
+  <script type="module" crossorigin src="./assets/index-DhYLK1Ka.js"></script>
 </head>
 <body>
 <div class="app">
-  <div class="header"><h1 id="room-title">空间语音聊天室 <span style="font-size:10px;color:var(--text2);font-weight:400">v3.1.6</span></h1><div style="font-size:10px;color:var(--accent)"><span id="conn-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#e04949;vertical-align:middle;margin-right:4px" title="连接状态"></span><span id="status">输入房间名加入</span></div></div>
+  <div class="header"><h1 id="room-title">空间语音聊天室 <span style="font-size:10px;color:var(--text2);font-weight:400">v3.3.0</span></h1><div style="font-size:10px;color:var(--accent)"><span id="conn-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#e04949;vertical-align:middle;margin-right:4px" title="连接状态"></span><span id="status">输入房间名加入</span></div></div>
   <div class="home-panel" id="home-panel"><div class="home-cards">
     <div class="home-card" id="btn-create-room-card"><div class="home-card-ring"><i>＋</i></div><div class="home-card-body"><div class="home-card-title">创建房间</div><div class="home-card-desc">设置名称与密码</div></div></div>
     <div class="home-card" id="btn-find-rooms"><div class="home-card-ring"><i>🔍</i></div><div class="home-card-body"><div class="home-card-title">查找房间</div><div class="home-card-desc">浏览或搜索已有房间</div></div></div>
     <div class="home-card" id="btn-profile"><div class="home-card-ring" id="home-avatar-ring"><i>👤</i></div><div class="home-card-body"><div class="home-card-title">角色设置</div><div class="home-card-desc" id="home-profile-name">未设置角色</div></div></div>
-    <div class="home-card" id="btn-stereo-pre" style="background:#1a3328;border-color:#22c55e33"><div class="home-card-ring" style="background:rgba(34,197,94,0.12);color:#22c55e"><i>🎧</i></div><div class="home-card-body"><div class="home-card-title" style="color:#22c55e">立体声测试</div><div class="home-card-desc" id="stereo-pre-status">进房间前测试左右声道</div></div></div>
   </div></div>
   <div class="panel" id="create-panel" style="display:none"><button class="back-btn" id="create-back">← 返回</button><div style="margin-top:16px;display:flex;flex-direction:column;gap:12px"><input id="create-name" placeholder="房间名称"><input id="create-pw" placeholder="密码(可选)" type="password"><button class="btn" id="btn-create-room">创建并进入</button></div></div>
   <div class="panel" id="room-panel" style="display:none"><div style="display:flex;gap:8px;margin-bottom:8px"><button class="back-btn" id="room-back">← 返回</button><input id="room-search" placeholder="搜索房间..."></div><div class="room-empty" id="room-empty">加载中...</div><div id="room-list"></div></div>
@@ -91,19 +90,6 @@ input:focus{border-color:var(--accent);}
     <button id="debug-filter-audio">🎧 音频</button>
     <button id="debug-filter-pos">📍 位置</button>
     <button id="debug-filter-avatar">🖼️ 头像</button>
-  </div>
-  <div style="flex-shrink:0;margin:8px 0;padding:8px;background:var(--card);border-radius:var(--radius-sm)">
-    <div style="font-size:12px;font-weight:600;margin-bottom:6px">🎧 立体声测试</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button id="stereo-test-a" class="btn btn-secondary" style="font-size:11px;padding:4px 10px">Panner</button>
-      <button id="stereo-test-b" class="btn btn-secondary" style="font-size:11px;padding:4px 10px">Merger</button>
-      <button id="stereo-test-c" class="btn btn-secondary" style="font-size:11px;padding:4px 10px">Haas</button>
-      <button id="stereo-test-d" class="btn btn-secondary" style="font-size:11px;padding:4px 10px">Buf</button>
-      <button id="stereo-test-e" class="btn btn-secondary" style="font-size:11px;padding:4px 10px">Dest</button>
-      <button id="stereo-test-f" class="btn btn-secondary" style="font-size:11px;padding:4px 10px">WAV</button>
-      <button id="stereo-test-stop" class="btn" style="font-size:11px;padding:4px 10px;background:var(--danger)">■</button>
-    </div>
-    <div id="stereo-test-status" style="font-size:10px;color:var(--text2);margin-top:4px">点击按钮播放左→右移动测试音</div>
   </div>
   <div class="debug-wrap" id="debug-wrap"><div class="debug-list" id="debug-list"></div></div>
 </div>
