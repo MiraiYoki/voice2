@@ -223,11 +223,18 @@ export async function toggleMic() {
   state.micBusy = true;
   try {
     if (state.localStream) {
+      // 关麦：停止本地流 + 从 LiveKit 取消发布
+      if (state._lkRoom && state._lkRoom.state === 'connected') {
+        try {
+          state._lkRoom.localParticipant.unpublishTrack(state._lkRoom.localParticipant.getTrackPublication('mic')?.track);
+        } catch (e) {}
+      }
       state.localStream.getAudioTracks().forEach(t => t.stop());
       state.localStream = null;
       updateMicUI(false);
       addLog('audio', '🔇 麦克风已关闭');
     } else {
+      // 开麦：获取新流 + 发布到 LiveKit
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -235,6 +242,20 @@ export async function toggleMic() {
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已开启');
+
+      // 发布到 LiveKit
+      if (state._lkRoom && state._lkRoom.state === 'connected') {
+        const tracks = state.localStream.getAudioTracks();
+        if (tracks.length > 0 && tracks[0].readyState === 'live') {
+          const audioTrack = new LocalAudioTrack(tracks[0]);
+          try {
+            await state._lkRoom.localParticipant.publishTrack(audioTrack, { name: 'mic' });
+            addLog('audio', '📤 音轨已重新发布');
+          } catch (e) {
+            addLog('err', '重新发布失败: ' + e.message);
+          }
+        }
+      }
     }
   } catch (e) {
     toast('麦克风切换失败');
@@ -394,9 +415,9 @@ export async function connectLiveKit(roomName) {
           name: participant.name || pid.slice(-6),
           micOn: true, isSpeaking: false,
           color: COLORS[state.peers.size % COLORS.length],
-          _snaps: [{ x: ROOM_SIZE / 2, y: ROOM_SIZE / 2, t: Date.now() }],
+          _snaps: [],  // 空快照，等位置数据填充
         });
-        addLog('conn', '新建 peer: ' + pid.slice(0,8));
+        addLog('conn', '新建 peer (音轨): ' + pid.slice(0,8));
       }
 
       // BUGFIX 3: try-catch 保护，防止单个 peer 失败阻断后续
@@ -424,7 +445,7 @@ export async function connectLiveKit(roomName) {
         name: p.name || pid.slice(-6),
         micOn: true, isSpeaking: false,
         color: COLORS[state.peers.size % COLORS.length],
-        _snaps: [{ x: ROOM_SIZE / 2, y: ROOM_SIZE / 2, t: Date.now() }],
+        _snaps: [],  // 空快照，等位置数据
       });
       updateRoomCount();
     });

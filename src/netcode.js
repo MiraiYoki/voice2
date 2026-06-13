@@ -100,8 +100,17 @@ function onDataReceived(data, participant) {
 
     const p = state.peers.get(pid);
     if (!p._snaps) p._snaps = [];
+
+    // 首包位置：立即吸附，避免从地图中心 lerp 过来造成跳跃
+    const isFirstSnap = p._snaps.length === 0;
+
     p._snaps.push({ x: d.x, y: d.y, t: Date.now() });
     if (p._snaps.length > 40) p._snaps.shift();
+
+    if (isFirstSnap) {
+      p.x = d.x;
+      p.y = d.y;
+    }
 
     if (d.micOn !== undefined) p.micOn = d.micOn;
     if (d.name) p.name = d.name;

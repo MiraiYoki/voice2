@@ -114,7 +114,7 @@ export function drawMap() {
 
   // 绘制 peers (100ms 快照插值)
   for (const [pid, p] of state.peers) {
-    if (!p._snaps || p._snaps.length === 0) { p.x = state.myPos.x; p.y = state.myPos.y; }
+    if (!p._snaps || p._snaps.length === 0) { /* 无位置数据，留原地 */ }
     else {
       const targetTime = now - renderDelay;
       const snaps = p._snaps;
