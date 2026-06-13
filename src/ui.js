@@ -221,14 +221,17 @@ function wireStereoTest() {
   }
 
   function getCtx() {
-    const ctx = state.audioCtx || new AudioContext();
+    // 独立 AudioContext，不受 app 通话模式影响
+    const ctx = new AudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
   }
 
   function diagInfo(ctx) {
     const d = ctx.destination;
-    return 'ctx=' + ctx.state + ' ch=' + d.channelCount + ' maxCh=' + d.maxChannelCount;
+    const a = navigator.audioSession;
+    return 'state=' + ctx.state + ' ch=' + d.channelCount + '/' + d.maxChannelCount
+      + (a ? ' session=' + (a.type || '?') : '');
   }
 
   // 左右轮播器: 每秒切换左右, 播放 beep 音
