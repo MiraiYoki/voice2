@@ -12,6 +12,7 @@ import {
   LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET,
   ROOM_SIZE, COLORS,
   PANNER_REF_DISTANCE, PANNER_MAX_DISTANCE, PANNER_ROLLOFF_FACTOR, EARSHOT_RADIUS,
+  SUBSCRIBE_IN, UNSUBSCRIBE_OUT,
 } from './config.js';
 
 // ── 5a. JWT生成 (浏览器WebCrypto) ──
@@ -237,7 +238,7 @@ export async function toggleMic() {
       // 开麦：获取新流 + 发布到 LiveKit
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
-      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false, channelCount: 1 } });
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       updateMicUI(true);
@@ -349,7 +350,7 @@ export async function connectLiveKit(roomName) {
   // 自动获取麦克风
   if (!state.localStream) {
     try {
-      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false, channelCount: 1 } });
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
@@ -478,10 +479,15 @@ export async function connectLiveKit(roomName) {
       for (const [pid, p] of state.peers) {
         if (!p._pub) continue;
         const dist = Math.sqrt((p.x - state.myPos.x) ** 2 + (p.y - state.myPos.y) ** 2);
-        const hearable = dist <= EARSHOT_RADIUS;
-        try { p._pub.setSubscribed(hearable); } catch (e) {}
+        // 滞后阈值：进入近→订阅，离开远→取消，防止边界反复横跳
+        const wasSubbed = p._subbed === true;
+        const shouldSub = wasSubbed ? dist <= UNSUBSCRIBE_OUT : dist <= SUBSCRIBE_IN;
+        if (shouldSub !== wasSubbed) {
+          try { p._pub.setSubscribed(shouldSub); } catch (e) {}
+          p._subbed = shouldSub;
+        }
       }
-    }, 500);
+    }, 300);  // 300ms 比之前的 500ms 更灵敏
     state._dcIntervals.push(subInterval);
 
     startDucking();

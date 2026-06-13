@@ -32,3 +32,11 @@ export const PANNER_REF_DISTANCE   = 100;
 export const PANNER_MAX_DISTANCE   = 500;
 export const PANNER_ROLLOFF_FACTOR = 2;
 export const EARSHOT_RADIUS = 500;  // 可听范围 (同 maxDistance)
+
+// 选择性订阅滞后阈值 (防边界抖动)
+export const SUBSCRIBE_IN  = 420;  // 进入此距离 → 订阅
+export const UNSUBSCRIBE_OUT = 550; // 超出此距离 → 取消订阅
+
+// 死推算
+export const DR_MAX_TIME = 500;    // 超过此时间无更新 → 冻结
+export const DR_BLEND_SPEED = 0.15; // 从推算位置回弹到真实位置的速度

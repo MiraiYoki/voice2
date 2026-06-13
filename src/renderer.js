@@ -6,6 +6,7 @@
 
 import { state } from './state.js';
 import { $, shadeColor } from './utils.js';
+import { DR_MAX_TIME, DR_BLEND_SPEED } from './config.js';
 
 // ── 6a. 坐标转换 & 相机 ──
 export function resizeCanvas() {
@@ -112,7 +113,7 @@ export function drawMap() {
   const now = Date.now();
   const renderDelay = 100;
 
-  // 绘制 peers (100ms 快照插值)
+  // 绘制 peers (100ms 快照插值 + 死推算)
   for (const [pid, p] of state.peers) {
     if (!p._snaps || p._snaps.length === 0) { /* 无位置数据，留原地 */ }
     else {
@@ -121,18 +122,48 @@ export function drawMap() {
       let i = 0;
       while (i < snaps.length - 1 && snaps[i + 1].t < targetTime) i++;
       let rx, ry;
+
       if (i >= snaps.length - 1) {
-        rx = snaps[snaps.length - 1].x;
-        ry = snaps[snaps.length - 1].y;
+        // 没有能包围 targetTime 的快照对 → 死推算 or 取最后位置
+        const last = snaps[snaps.length - 1];
+        const age = now - last.t;
+
+        // 计算速度（从最后两个快照）
+        if (!p._drVx) p._drVx = 0;
+        if (!p._drVy) p._drVy = 0;
+        if (snaps.length >= 2) {
+          const a = snaps[snaps.length - 2];
+          const b = last;
+          const dv = (b.t - a.t) || 50;
+          p._drVx = (b.x - a.x) / dv;
+          p._drVy = (b.y - a.y) / dv;
+        }
+
+        if (age < DR_MAX_TIME) {
+          // 死推算：沿速度方向外推
+          const dt = (targetTime - last.t);
+          rx = last.x + p._drVx * dt;
+          ry = last.y + p._drVy * dt;
+        } else {
+          // 太久没更新，冻结在最后位置
+          rx = last.x;
+          ry = last.y;
+        }
       } else {
+        // 正常插值
         const a = snaps[i], b = snaps[i + 1];
         const dt = b.t - a.t || 16;
         const t = Math.max(0, Math.min(1, (targetTime - a.t) / dt));
         rx = a.x + (b.x - a.x) * t;
         ry = a.y + (b.y - a.y) * t;
+        // 插值可用时重置死推算速度（新数据到了）
+        p._drVx = 0;
+        p._drVy = 0;
       }
-      p.x += (rx - p.x) * 0.3;
-      p.y += (ry - p.y) * 0.3;
+
+      // 从推算/插值位置平滑回弹
+      p.x += (rx - p.x) * (p._drVx !== 0 ? DR_BLEND_SPEED : 0.3);
+      p.y += (ry - p.y) * (p._drVx !== 0 ? DR_BLEND_SPEED : 0.3);
     }
     drawPeer(ctx, pid, p);
   }
