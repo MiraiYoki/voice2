@@ -237,19 +237,27 @@ function applyNoiseGate(rawStream) {
   const buf = new Uint8Array(analyser.frequencyBinCount);
   const gatedStream = dest.stream;
   let gated = false;
+  let dead = false;
   const tick = () => {
-    if (state.localStream !== gatedStream) return; // 流已更换，停止
+    if (dead) return;
+    if (state.localStream !== gatedStream) {
+      // 流已被替换，清理并停止
+      dead = true;
+      try { src.disconnect(); gate.disconnect(); analyser.disconnect(); } catch(e) {}
+      return;
+    }
     analyser.getByteFrequencyData(buf);
     const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
     const target = avg > NOISE_FLOOR ? 1.0 : 0.01;
-    // 平滑门控：开快关慢
     const speed = target > gate.gain.value ? 0.3 : 0.06;
     gate.gain.value += (target - gate.gain.value) * speed;
-    if (target > 0.5 && !gated) { gated = true; /* 首次开，不记日志 */ }
+    if (target > 0.5 && !gated) { gated = true; }
     requestAnimationFrame(tick);
   };
   tick();
 
+  // 保存原始流引用，关麦时释放
+  state._rawStream = rawStream;
   addLog('audio', '🔇 噪声门已启用, 阈值=' + NOISE_FLOOR);
   return gatedStream;
 }
@@ -266,7 +274,13 @@ export async function toggleMic() {
           state._lkRoom.localParticipant.unpublishTrack(state._lkRoom.localParticipant.getTrackPublication('mic')?.track);
         } catch (e) {}
       }
+      // 释放噪声门处理后的流
       state.localStream.getAudioTracks().forEach(t => t.stop());
+      // 释放原始 getUserMedia 流（否则下次获取麦克风会失败）
+      if (state._rawStream) {
+        state._rawStream.getAudioTracks().forEach(t => t.stop());
+        state._rawStream = null;
+      }
       state.localStream = null;
       updateMicUI(false);
       addLog('audio', '🔇 麦克风已关闭');

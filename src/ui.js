@@ -68,6 +68,7 @@ export function leaveRoom() {
   // 关麦克风
   if (state.localStream) {
     try { state.localStream.getAudioTracks().forEach(t => t.stop()); } catch (e) {}
+    try { if (state._rawStream) { state._rawStream.getAudioTracks().forEach(t => t.stop()); state._rawStream = null; } } catch (e) {}
     state.localStream = null;
     updateMicUI(false);
   }
