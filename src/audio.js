@@ -50,7 +50,13 @@ export async function makeLKToken(identity, room) {
 }
 
 // ── 5b. 空间音频管线 ──
-const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+// 移动端检测: iOS(iPhone/iPad/iPod) + 新 iPad(桌面UA+触屏) + Android移动端
+const isMobile = (() => {
+  if (/iPhone|iPad|iPod|Android/.test(navigator.userAgent)) return true;
+  // iPadOS 13+: 桌面UA + 触屏
+  if (navigator.maxTouchPoints > 1 && /MacIntel/.test(navigator.platform)) return true;
+  return false;
+})();
 
 export async function setupAudioNodes(pid, remoteStream) {
   if (!state.audioCtx) {
@@ -137,7 +143,7 @@ export async function setupAudioNodes(pid, remoteStream) {
   }, 500);
   info._diagTimer = diagTimer;  // 存储以便 removePeer 清理
 
-  if (isIOS) {
+  if (isMobile) {
     // iOS Safari 不支持 HRTF PannerNode → 用 StereoPanner (左右) + Gain (距离)
     const stereo = state.audioCtx.createStereoPanner();
     const gain = state.audioCtx.createGain();
@@ -146,7 +152,7 @@ export async function setupAudioNodes(pid, remoteStream) {
     info._stereoPanner = stereo;
     info.gainNode = gain;
     info._isIOS = true;
-    addLog('audio', 'iOS模式: StereoPanner + 距离衰减');
+    addLog('audio', '移动端模式: StereoPanner(左右) + 距离衰减');
   } else {
     const panner = state.audioCtx.createPanner();
     const gain = state.audioCtx.createGain();
@@ -210,15 +216,13 @@ export function updateSpatialAudio() {
 
     if (p._isIOS) {
       const dist = Math.sqrt(rx * rx + ry * ry);
-      // 距离衰减
-      let vol;
-      if (dist < PANNER_REF_DISTANCE) vol = 1;
-      else if (dist > PANNER_MAX_DISTANCE) vol = 0;
-      else vol = 1 - (dist - PANNER_REF_DISTANCE) / (PANNER_MAX_DISTANCE - PANNER_REF_DISTANCE);
+      // 距离衰减 (软曲线, 最大距离不归零而是降到 0.05)
+      const ratio = Math.max(0, Math.min(1, 1 - (dist - PANNER_REF_DISTANCE) / (PANNER_MAX_DISTANCE - PANNER_REF_DISTANCE)));
+      const vol = 0.05 + 0.95 * ratio;
       if (p.gainNode) p.gainNode.gain.setTargetAtTime(vol, tNow, 0.02);
-      // 左右声像 (StereoPanner, iOS 可用)
+      // 左右声像 (缩小参考距离, 增强效果)
       if (p._stereoPanner) {
-        const pan = Math.max(-1, Math.min(1, rx / PANNER_MAX_DISTANCE));
+        const pan = Math.max(-1, Math.min(1, rx / 200)); // 200px 即全偏
         p._stereoPanner.pan.setTargetAtTime(pan, tNow, 0.02);
       }
     } else if (p.panner) {
