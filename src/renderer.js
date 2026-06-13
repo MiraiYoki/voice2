@@ -162,8 +162,16 @@ export function drawMap() {
       }
 
       // 从推算/插值位置平滑回弹
-      p.x += (rx - p.x) * (p._drVx !== 0 ? DR_BLEND_SPEED : 0.3);
-      p.y += (ry - p.y) * (p._drVx !== 0 ? DR_BLEND_SPEED : 0.3);
+      const errDist = Math.sqrt((rx - p.x) ** 2 + (ry - p.y) ** 2);
+      if (errDist > 8) {
+        // DR 过度外推，直接吸附避免可见回弹
+        p.x = rx;
+        p.y = ry;
+      } else {
+        const speed = p._drVx !== 0 || p._drVy !== 0 ? DR_BLEND_SPEED : 0.3;
+        p.x += (rx - p.x) * speed;
+        p.y += (ry - p.y) * speed;
+      }
     }
     drawPeer(ctx, pid, p);
   }
