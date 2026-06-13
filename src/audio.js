@@ -58,6 +58,13 @@ export async function setupAudioNodes(pid, remoteStream) {
     return;
   }
 
+  let info = state.peers.get(pid);
+  if (!info) return;
+  // 并发防重入：同一 pid 同时只能有一个 setupAudioNodes 在执行
+  if (info._settingUp) { addLog('audio', 'setupAudioNodes 跳过(已在设置): ' + pid.slice(0,8)); return; }
+  info._settingUp = true;
+
+  try {
   // BUGFIX 1: await resume() — 之前没等异步完成就继续了
   if (state.audioCtx.state === 'suspended') {
     try {
@@ -67,12 +74,6 @@ export async function setupAudioNodes(pid, remoteStream) {
       addLog('err', 'AudioContext恢复失败: ' + e.message);
       return;
     }
-  }
-
-  let info = state.peers.get(pid);
-  if (!info) {
-    info = { x: ROOM_SIZE / 2, y: ROOM_SIZE / 2 };
-    state.peers.set(pid, info);
   }
 
   // BUGFIX 2: 重连时清理旧音频管线再重建，而不是直接 return
@@ -132,8 +133,9 @@ export async function setupAudioNodes(pid, remoteStream) {
     diagA.getByteFrequencyData(diagBuf);
     const avg = diagBuf.reduce((a,b)=>a+b,0)/diagBuf.length;
     if (diagTicks++ < 5) addLog('audio', '🎵 远端音量[' + pid.slice(0,6) + ']: ' + avg.toFixed(1));
-    if (diagTicks === 10) clearInterval(diagTimer);
+    if (diagTicks >= 10) { clearInterval(diagTimer); try { diagA.disconnect(); } catch(e) {} }
   }, 500);
+  info._diagTimer = diagTimer;  // 存储以便 removePeer 清理
 
   if (isIOS) {
     const gain = state.audioCtx.createGain();
@@ -190,6 +192,9 @@ export async function setupAudioNodes(pid, remoteStream) {
   }
 
   updateSpatialAudio();
+  } finally {
+    info._settingUp = false;
+  }
 }
 
 // ── 5c. 空间位置更新 ──
@@ -220,14 +225,16 @@ export function updateSpatialAudio() {
 
 // ── 5d. 推讲 (toggleMic) ──
 export async function toggleMic() {
-  if (state.micBusy) return;
+  if (state.micBusy || state._closing) return;
   state.micBusy = true;
   try {
     if (state.localStream) {
       // 关麦：停止本地流 + 从 LiveKit 取消发布
+      state.micOn = false;
       if (state._lkRoom && state._lkRoom.state === 'connected') {
         try {
-          state._lkRoom.localParticipant.unpublishTrack(state._lkRoom.localParticipant.getTrackPublication('mic')?.track);
+          const pub = state._lkRoom.localParticipant.getTrackPublication('mic');
+          if (pub) state._lkRoom.localParticipant.unpublishTrack(pub);
         } catch (e) {}
       }
       state.localStream.getAudioTracks().forEach(t => t.stop());
@@ -239,6 +246,7 @@ export async function toggleMic() {
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       await new Promise(r => setTimeout(r, 150));
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, channelCount: 1 } });
+      state.micOn = true;
       if (navigator.audioSession) navigator.audioSession.type = 'play-and-record';
       if (!state.audioCtx) { state.audioCtx = new AudioContext(); await state.audioCtx.resume(); }
       updateMicUI(true);
@@ -290,45 +298,40 @@ function setConnState(st) {
   }
 }
 
-// 指数退避重连
+// 指数退避重连 (循环式，非递归)
 const MAX_RECONNECT_DELAY = 30000;
 const BASE_RECONNECT_DELAY = 1000;
 
 export async function reconnectLiveKit() {
   if (state._lkReconnecting || !state._lkRoomName || !state.currentRoom) return;
   state._lkReconnecting = true;
-  state._lkReconnectAttempts++;
   setConnState('reconnecting');
 
-  const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, state._lkReconnectAttempts - 1), MAX_RECONNECT_DELAY);
-  const jitter = Math.random() * 1000;
-  addLog('conn', '⏳ 重连 #' + state._lkReconnectAttempts + ' — 等待 ' + Math.round((delay + jitter) / 1000) + 's');
+  while (state._lkReconnecting && state._lkRoomName && state.currentRoom) {
+    state._lkReconnectAttempts++;
+    const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, state._lkReconnectAttempts - 1), MAX_RECONNECT_DELAY);
+    const jitter = Math.random() * 1000;
+    addLog('conn', '⏳ 重连 #' + state._lkReconnectAttempts + ' — 等待 ' + Math.round((delay + jitter) / 1000) + 's');
 
-  await new Promise(r => setTimeout(r, delay + jitter));
+    await new Promise(r => setTimeout(r, delay + jitter));
 
-  try {
-    // 清理旧房间
-    if (state._lkRoom) {
-      try { state._lkRoom.disconnect(); } catch (e) {}
-      state._lkRoom = null;
+    try {
+      if (state._lkRoom) { try { state._lkRoom.disconnect(); } catch (e) {} state._lkRoom = null; }
+      stopPositionSync();
+      stopDucking();
+      state._dcIntervals = [];
+      await connectLiveKit(state._lkRoomName);
+      addLog('conn', '✅ 重连成功！');
+      toast('已重新连接');
+      state._lkReconnectAttempts = 0;
+      state._lkReconnecting = false;
+      return;
+    } catch (e) {
+      addLog('err', '❌ 重连失败: ' + e.message + ' (#' + state._lkReconnectAttempts + ')');
+      // while loop continues with next attempt
     }
-    // 清理旧的 intervals
-    stopPositionSync();
-    stopDucking();
-    state._dcIntervals = [];
-
-    // 重新连接
-    await connectLiveKit(state._lkRoomName);
-    addLog('conn', '✅ 重连成功！');
-    toast('已重新连接');
-    state._lkReconnecting = false;
-    state._lkReconnectAttempts = 0;
-  } catch (e) {
-    addLog('err', '❌ 重连失败: ' + e.message);
-    state._lkReconnecting = false;
-    // 继续尝试
-    reconnectLiveKit();
   }
+  state._lkReconnecting = false;
 }
 
 // ── 连接质量监控 ──
@@ -422,13 +425,97 @@ export async function connectLiveKit(roomName) {
   const lkRoom = new Room();
   state._lkRoom = lkRoom;
 
+  // 事件监听器在 connect() 之前注册，避免丢失已有参与者的音轨
+  lkRoom.on('trackUnsubscribed', (track, pub, participant) => {
+    if (track.kind !== 'audio') return;
+    const pid = participant.identity;
+    const info = state.peers.get(pid);
+    if (info) { info._subbed = false; info.stream = null; }
+    addLog('conn', '🔇 远端取消发布: ' + pid.slice(0,8));
+  });
+
+  lkRoom.on('trackSubscribed', (track, pub, participant) => {
+    const pname = (participant.name || participant.identity).slice(0,8);
+    addLog('conn', '🎵 远端音轨: ' + pname
+      + ' kind=' + track.kind
+      + ' readyState=' + (track.mediaStreamTrack?.readyState || '?'));
+    if (track.kind !== 'audio') return;
+    const pid = participant.identity;
+    const remoteStream = new MediaStream([track.mediaStreamTrack]);
+    if (!state.peers.has(pid)) {
+      state.peers.set(pid, {
+        x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
+        name: participant.name || pid.slice(-6),
+        micOn: true, isSpeaking: false,
+        color: COLORS[state.peers.size % COLORS.length],
+        _snaps: [],
+      });
+      addLog('conn', '新建 peer (音轨): ' + pid.slice(0,8));
+    }
+
+    const info = state.peers.get(pid);
+    info._pub = pub;
+    try {
+      setupAudioNodes(pid, remoteStream);
+    } catch (e) {
+      addLog('err', '❌ setupAudioNodes 异常 [' + pid.slice(0,8) + ']: ' + e.message);
+    }
+    info._subbed = true;
+    addLog('conn', '📡 已标记: ' + pid.slice(0,8));
+  });
+
+  lkRoom.on('trackMuted', (track, participant) => {
+    if (track.kind !== 'audio') return;
+    const info = state.peers.get(participant.identity);
+    if (info) info.micOn = false;
+    addLog('conn', '🤫 远端静音: ' + participant.identity.slice(0,8));
+  });
+
+  lkRoom.on('trackUnmuted', (track, participant) => {
+    if (track.kind !== 'audio') return;
+    const info = state.peers.get(participant.identity);
+    if (info) info.micOn = true;
+    addLog('conn', '🎙️ 远端开麦: ' + participant.identity.slice(0,8));
+  });
+
+  lkRoom.on('participantDisconnected', p => {
+    const pid = p.identity;
+    addLog('conn', '👋 peer离开: ' + pid.slice(0,8));
+    if (state.peers.has(pid)) { removePeer(pid); updateRoomCount(); }
+  });
+
+  lkRoom.on('participantConnected', p => {
+    const pid = p.identity;
+    if (pid === state.myPeerId || state.peers.has(pid)) return;
+    addLog('conn', '👤 peer加入: ' + (p.name || pid).slice(0,8));
+    state.peers.set(pid, {
+      x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
+      name: p.name || pid.slice(-6),
+      micOn: true, isSpeaking: false,
+      color: COLORS[state.peers.size % COLORS.length],
+      _snaps: [],
+    });
+    updateRoomCount();
+  });
+
+  lkRoom.on('disconnected', () => {
+    if (!state._lkRoomName || !state.currentRoom) return;
+    addLog('err', '🔌 LiveKit 已断开！');
+    setConnState('disconnected');
+    stopPositionSync();
+    stopDucking();
+    stopQualityMonitor();
+    state._dcIntervals = [];
+    if (!state._lkReconnecting) reconnectLiveKit();
+  });
+
   try {
     const jwt = await makeLKToken(state.myPeerId, roomName);
     addLog('conn', 'JWT已生成');
     await lkRoom.connect(LIVEKIT_URL, jwt);
     addLog('conn', '🔊 LiveKit 已连接');
     setConnState('connected');
-    state._lkReconnectAttempts = 0;  // 重置重连计数
+    state._lkReconnectAttempts = 0;
 
     // 发布本地音轨
     const tracks = state.localStream ? state.localStream.getAudioTracks() : [];
@@ -444,84 +531,6 @@ export async function connectLiveKit(roomName) {
     } else {
       addLog('err', '⚠️ 无可用本地音轨 (readyState=' + (tracks[0]?.readyState || 'none') + ')');
     }
-
-    lkRoom.on('trackUnsubscribed', (track, pub, participant) => {
-      if (track.kind !== 'audio') return;
-      const pid = participant.identity;
-      const info = state.peers.get(pid);
-      if (info) { info._subbed = false; info.stream = null; }
-      addLog('conn', '🔇 远端取消发布: ' + pid.slice(0,8));
-    });
-
-    lkRoom.on('trackSubscribed', (track, pub, participant) => {
-      const pname = (participant.name || participant.identity).slice(0,8);
-      addLog('conn', '🎵 远端音轨: ' + pname
-        + ' kind=' + track.kind
-        + ' readyState=' + (track.mediaStreamTrack?.readyState || '?'));
-      if (track.kind !== 'audio') return;
-      const pid = participant.identity;
-      const remoteStream = new MediaStream([track.mediaStreamTrack]);
-      if (!state.peers.has(pid)) {
-        state.peers.set(pid, {
-          x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
-          name: participant.name || pid.slice(-6),
-          micOn: true, isSpeaking: false,
-          color: COLORS[state.peers.size % COLORS.length],
-          _snaps: [],  // 空快照，等位置数据填充
-        });
-        addLog('conn', '新建 peer (音轨): ' + pid.slice(0,8));
-      }
-
-      // BUGFIX 3: try-catch 保护，防止单个 peer 失败阻断后续
-      const info = state.peers.get(pid);
-      info._pub = pub;
-      try {
-        setupAudioNodes(pid, remoteStream);
-      } catch (e) {
-        addLog('err', '❌ setupAudioNodes 异常 [' + pid.slice(0,8) + ']: ' + e.message);
-      }
-
-      // 标记已订阅 (autoSubscribe=true 时默认已订阅)
-      // 这样定时器首次检查走 subOut(550px) 而非 subIn(420px)
-      // 避免地图加载后位置变动导致误取消订阅
-      info._subbed = true;
-      addLog('conn', '📡 已标记: ' + pid.slice(0,8));
-    });
-
-    lkRoom.on('participantDisconnected', p => {
-      const pid = p.identity;
-      addLog('conn', '👋 peer离开: ' + pid.slice(0,8));
-      if (state.peers.has(pid)) { removePeer(pid); updateRoomCount(); }
-    });
-
-    lkRoom.on('participantConnected', p => {
-      const pid = p.identity;
-      if (pid === state.myPeerId || state.peers.has(pid)) return;
-      addLog('conn', '👤 peer加入: ' + (p.name || pid).slice(0,8));
-      state.peers.set(pid, {
-        x: ROOM_SIZE / 2, y: ROOM_SIZE / 2,
-        name: p.name || pid.slice(-6),
-        micOn: true, isSpeaking: false,
-        color: COLORS[state.peers.size % COLORS.length],
-        _snaps: [],  // 空快照，等位置数据
-      });
-      updateRoomCount();
-    });
-
-    // 断线检测 + 自动重连
-    lkRoom.on('disconnected', () => {
-      if (!state._lkRoomName || !state.currentRoom) return;  // 用户主动离开
-      addLog('err', '🔌 LiveKit 已断开！');
-      setConnState('disconnected');
-      stopPositionSync();
-      stopDucking();
-      stopQualityMonitor();
-      state._dcIntervals = [];
-      // 自动重连
-      if (!state._lkReconnecting) {
-        reconnectLiveKit();
-      }
-    });
 
     startPositionSync(lkRoom);
     addLog('pos', '位置同步已启动');
@@ -552,6 +561,7 @@ export async function connectLiveKit(roomName) {
       }
     }, 300);  // 300ms 比之前的 500ms 更灵敏
     state._dcIntervals.push(subInterval);
+    state._subInterval = subInterval;  // 独立引用，不被 stopPositionSync 误杀
 
     startDucking();
     startQualityMonitor();
@@ -581,7 +591,7 @@ export function removePeer(pid) {
     try { if (p.panner) p.panner.disconnect(); } catch (e) {}
     try { if (p.gainNode) p.gainNode.disconnect(); } catch (e) {}
     try { if (p._audioEl) { p._audioEl.srcObject = null; p._audioEl.remove(); } } catch (e) {}
-    try { if (p._testEl) { p._testEl.srcObject = null; p._testEl.remove(); } } catch (e) {}
+    try { if (p._diagTimer) clearInterval(p._diagTimer); } catch (e) {}
     try { if (p.pc) p.pc.close(); } catch (e) {}
     state.peers.delete(pid);
     addLog('audio', '已清理 peer: ' + pid.slice(0,8));
@@ -589,22 +599,23 @@ export function removePeer(pid) {
   updateRoomCount();
 }
 
-// ── 5g. Ducking (非对称平滑) ──
+// ── 5g. Ducking (setTargetAtTime, 不与空间音频冲突) ──
 export function startDucking() {
   if (state.duckTimer) return;
   state.duckTimer = setInterval(() => {
+    if (!state.audioCtx) return;
     let loudest = null, loudestVol = 0;
     for (const [pid, p] of state.peers) {
       const vol = p.smoothedVol || 0;
       if (vol > loudestVol) { loudestVol = vol; loudest = p; }
     }
+    const tNow = state.audioCtx.currentTime;
     for (const [pid, p] of state.peers) {
       if (!p.gainNode) continue;
       const target = (loudestVol > 10 && p !== loudest) ? 0.25 : 1.0;
-      const cur = p.gainNode.gain.value;
-      // 非对称平滑: 压得快(0.45) 回得慢(0.08)，听觉更自然
-      const speed = target < cur ? 0.45 : 0.08;
-      p.gainNode.gain.value = cur + (target - cur) * speed;
+      // 用 setTargetAtTime 替代同步写 value，与 updateSpatialAudio 的自动化共存
+      const timeConst = target < 0.5 ? 0.03 : 0.15; // 压快回慢
+      p.gainNode.gain.setTargetAtTime(target, tNow, timeConst);
     }
   }, 100);
 }

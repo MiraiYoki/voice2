@@ -99,6 +99,7 @@ const _rawState = {
   audioCtx: null,
   micOn: true,
   micBusy: false,
+  _closing: false,       // leaveRoom 中置 true, 阻止 toggleMic
 
   // ── 地图 & 相机 ──
   worldW: 1600,

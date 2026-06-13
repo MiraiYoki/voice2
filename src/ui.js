@@ -40,6 +40,7 @@ export function joinRoom(asCreator) {
 // ── 9b. 离开房间 ──
 export function leaveRoom() {
   if (!state.currentRoom) return;
+  state._closing = true;  // 阻止 toggleMic 等异步操作
 
   // 清理房间
   if (state.regMqtt && state.isRoomCreator) {

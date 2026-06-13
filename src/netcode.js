@@ -124,6 +124,7 @@ function onDataReceived(data, participant) {
     }
 
     const p = state.peers.get(pid);
+    // 只更新位置相关字段，不覆盖 _pub/_subbed/stream 等音频字段
     if (!p._snaps) p._snaps = [];
 
     // 首包位置：立即吸附，避免从地图中心 lerp 过来造成跳跃
