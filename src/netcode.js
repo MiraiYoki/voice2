@@ -7,7 +7,7 @@
 import { DataPacket_Kind } from 'livekit-client';
 import { state } from './state.js';
 import { ROOM_SIZE, COLORS } from './config.js';
-import { updateSpatialAudio, checkSubscriptions } from './audio.js';
+import { updateSpatialAudio } from './audio.js';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -142,7 +142,6 @@ function onDataReceived(data, participant) {
     if (d.name) p.name = d.name;
 
     updateSpatialAudio();
-    checkSubscriptions();  // 响应式：位置变化立即检查订阅
   } catch (e) { /* ignore malformed */ }
 }
 

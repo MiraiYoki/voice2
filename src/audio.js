@@ -12,7 +12,6 @@ import {
   LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET,
   ROOM_SIZE, COLORS,
   PANNER_REF_DISTANCE, PANNER_MAX_DISTANCE, PANNER_ROLLOFF_FACTOR, EARSHOT_RADIUS,
-  SUBSCRIBE_IN, UNSUBSCRIBE_OUT,
 } from './config.js';
 
 // ── 5a. JWT生成 (浏览器WebCrypto) ──
@@ -466,8 +465,7 @@ export async function connectLiveKit(roomName) {
     } catch (e) {
       addLog('err', '❌ setupAudioNodes 异常 [' + pid.slice(0,8) + ']: ' + e.message);
     }
-    info._subbed = true;
-    addLog('conn', '📡 已标记: ' + pid.slice(0,8));
+    addLog('conn', '📡 音轨就绪: ' + pid.slice(0,8));
   });
 
   lkRoom.on('trackMuted', (track, participant) => {
@@ -548,14 +546,7 @@ export async function connectLiveKit(roomName) {
       addLog('avatar', '头像已发送 (1s重试)');
     }, 1000);
 
-    // 响应式订阅检查 (LiveKit 同款 — 位置变化时立即调，无需轮询)
-    // 同时保留 2s 慢保活定时器
-    state._dcIntervals.push(setInterval(checkSubscriptions, 2000));
-    checkSubscriptions();  // 立即执行一次
-
-    const subInterval = setInterval(checkSubscriptions, 2000);
-    state._subInterval = subInterval;
-
+    // 进入房间后所有人常驻订阅，不断开。距离通过音频衰减自然处理。
     startDucking();
     startQualityMonitor();
 
@@ -591,25 +582,6 @@ export function removePeer(pid) {
     addLog('audio', '已清理 peer: ' + pid.slice(0,8));
   }
   updateRoomCount();
-}
-
-// ── 响应式订阅检查 (LiveKit 同款) ──
-export function checkSubscriptions() {
-  if (!state._lkRoom || state._lkRoom.state !== 'connected') return;
-  const q = state._qualityLevel;
-  const subIn  = q === 'bad' ? 200 : q === 'poor' ? 350 : SUBSCRIBE_IN;
-  const subOut = q === 'bad' ? 350 : q === 'poor' ? 500 : UNSUBSCRIBE_OUT;
-
-  for (const [pid, p] of state.peers) {
-    if (!p._pub) continue;
-    const dist = Math.sqrt((p.x - state.myPos.x) ** 2 + (p.y - state.myPos.y) ** 2);
-    const wasSubbed = p._subbed === true;
-    const shouldSub = wasSubbed ? dist <= subOut : dist <= subIn;
-    if (shouldSub !== wasSubbed) {
-      try { p._pub.setSubscribed(shouldSub); } catch (e) {}
-      p._subbed = shouldSub;
-    }
-  }
 }
 
 // ── 5g. Ducking (setTargetAtTime, 不与空间音频冲突) ──
