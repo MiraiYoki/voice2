@@ -51,9 +51,9 @@ export function connectRegistry() {
     if (!msg.toString()) {
       // 空消息 = 房间销毁
       state.rooms.delete(name);
-      if (name === state.currentRoom) {
+      if (name === state.currentRoom && !state._closing) {
+        // 别人销毁了房间才自动退出，自己销毁时跳过（_closing=true）
         toast('房间已被销毁');
-        // leaveRoom 由 ui.js (R4) 提供 — 此处延迟导入避免循环
         import('./ui.js').then(m => m.leaveRoom()).catch(() => {
           state.currentRoom = null;
         });
