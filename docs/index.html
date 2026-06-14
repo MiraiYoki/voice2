@@ -53,15 +53,16 @@ input:focus{border-color:var(--accent);}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* 退出按钮 */
-.btn-leave-top{display:none;position:absolute;top:2px;right:0;background:var(--danger-dim);color:var(--danger);border:1px solid rgba(224,73,73,0.25);border-radius:12px;padding:3px 10px;font-size:11px;cursor:pointer;z-index:10;}
+.btn-leave-top{display:none;position:fixed;top:10px;right:calc(50vw - 260px + 16px);background:rgba(224,73,73,0.1);color:var(--danger);border:1px solid rgba(224,73,73,0.3);border-radius:14px;padding:4px 12px;font-size:11px;cursor:pointer;z-index:10;}
+@media(max-width:520px){.btn-leave-top{right:16px}}
 
 /* 弹窗面板 */
-.popup-panel{display:none;position:absolute;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;z-index:150;flex-direction:column;gap:3px;min-width:120px;}
+.popup-panel{display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;z-index:150;flex-direction:column;gap:3px;min-width:120px;}
 .popup-panel button{padding:6px 12px;border-radius:8px;border:none;background:var(--card);color:var(--text);font-size:12px;cursor:pointer;text-align:left;white-space:nowrap;}
 .popup-panel button:hover{background:var(--accent-dim);}
 
 /* 聊天 */
-.chat-bar{display:none;position:absolute;bottom:60px;left:8px;right:8px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;z-index:50;}
+.chat-bar{display:none;position:absolute;bottom:72px;left:12px;right:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;z-index:50;}
 .chat-bar input{flex:1;padding:6px 10px;font-size:12px;}
 .chat-bubble{position:absolute;background:rgba(22,19,43,0.92);color:var(--text);padding:4px 10px;border-radius:12px;font-size:11px;max-width:140px;pointer-events:none;white-space:pre-wrap;word-break:break-word;z-index:60;animation:chatFade 5s forwards;}
 @keyframes chatFade{0%{opacity:1;transform:translateY(0)}80%{opacity:1}100%{opacity:0;transform:translateY(-20px)}}
@@ -84,15 +85,16 @@ input:focus{border-color:var(--accent);}
 .debug-wrap::-webkit-scrollbar{width:4px;}
 .debug-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 </style>
-  <script type="module" crossorigin src="./assets/index-CW6G8hHR.js"></script>
+  <script type="module" crossorigin src="./assets/index-Chrzjfhh.js"></script>
 </head>
 <body>
 <div class="app">
   <div class="header">
     <h1 id="room-title">空间语音聊天室 <span style="font-size:10px;color:var(--text2);font-weight:400">v3.6.0</span></h1>
     <div style="font-size:10px;color:var(--accent)"><span id="conn-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#e04949;vertical-align:middle;margin-right:4px" title="连接状态"></span><span id="status">输入房间名加入</span></div>
-    <button class="btn-leave-top" id="btn-leave-top">✕ 退出</button>
+    
   </div>
+  <button class="btn-leave-top" id="btn-leave-top">✕</button>
   <div class="home-panel" id="home-panel"><div class="home-cards">
     <div class="home-card" id="btn-create-room-card"><div class="home-card-ring"><i>＋</i></div><div class="home-card-body"><div class="home-card-title">创建房间</div><div class="home-card-desc">设置名称与密码</div></div></div>
     <div class="home-card" id="btn-find-rooms"><div class="home-card-ring"><i>🔍</i></div><div class="home-card-body"><div class="home-card-title">查找房间</div><div class="home-card-desc">浏览或搜索已有房间</div></div></div>

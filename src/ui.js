@@ -167,20 +167,22 @@ export function wireUI() {
   $('btn-mic').onclick = toggleMic;
   $('btn-leave-top').onclick = leaveRoom;
 
-  // 菜单面板 (动态填充, 定位在按钮上方)
+  // 菜单面板 (定位在按钮上方)
   $('btn-menu').onclick = () => {
     const p = $('menu-panel');
     if (!p) return;
     const isOpen = p.style.display === 'flex';
-    p.style.display = isOpen ? 'none' : 'flex';
-    if (!isOpen) {
-      const btn = $('btn-menu');
-      const rect = btn.getBoundingClientRect();
-      p.style.left = Math.max(0, rect.left - 60) + 'px';
-      p.style.top = (rect.top - p.offsetHeight - 8) + 'px';
-      p.style.bottom = 'auto'; p.style.right = 'auto';
-      fillMenuPanel();
-    }
+    if (isOpen) { p.style.display = 'none'; return; }
+    fillMenuPanel();
+    // 先显示再测量高度
+    p.style.display = 'flex';
+    p.style.visibility = 'hidden';
+    const btn = $('btn-menu');
+    const rect = btn.getBoundingClientRect();
+    p.style.left = Math.max(4, rect.left - 70) + 'px';
+    p.style.top = (rect.top - p.offsetHeight - 6) + 'px';
+    p.style.bottom = 'auto'; p.style.right = 'auto';
+    p.style.visibility = 'visible';
   };
   document.addEventListener('click', (e) => {
     const mp = $('menu-panel');
