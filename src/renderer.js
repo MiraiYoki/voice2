@@ -185,7 +185,7 @@ export function drawMap() {
   requestAnimationFrame(drawMap);
 }
 
-// ── 聊天气泡渲染 (堆叠, 15s渐消上移) ──
+// ── 聊天气泡渲染 (创建后常驻, CSS动画自理, 只清理不重建) ──
 function renderChatBubbles() {
   const mapWrap = document.getElementById('map-wrap');
   if (!mapWrap) return;
@@ -194,10 +194,14 @@ function renderChatBubbles() {
   const now = Date.now();
   const bubbles = state._chatBubbles || [];
 
+  // 只清理过期, 不重建DOM
   for (let i = bubbles.length - 1; i >= 0; i--) {
-    if (now - bubbles[i].t > 10000) bubbles.splice(i, 1);
+    if (now - bubbles[i].t > 10000) {
+      const el = bubbles[i]._el;
+      if (el) { try { el.remove(); } catch(e) {} }
+      bubbles.splice(i, 1);
+    }
   }
-  document.querySelectorAll('.chat-bubble').forEach(el => el.remove());
 
   const groups = {};
   for (const bub of bubbles) {
@@ -206,6 +210,14 @@ function renderChatBubbles() {
   }
 
   for (const bub of bubbles) {
+    // 有DOM只更新位置, 无DOM才创建
+    if (!bub._el) {
+      const el = document.createElement('div');
+      el.className = 'chat-bubble';
+      el.textContent = bub.text;
+      document.body.appendChild(el);
+      bub._el = el;
+    }
     let wx, wy;
     if (bub.pid === state.myPeerId) {
       wx = state.myPos.x; wy = state.myPos.y;
@@ -220,13 +232,8 @@ function renderChatBubbles() {
     const pidBubs = groups[bub.pid];
     const idx = pidBubs.indexOf(bub);
     const stackOffset = (pidBubs.length - 1 - idx) * 28;
-
-    const el = document.createElement('div');
-    el.className = 'chat-bubble';
-    el.style.left = px + 'px';
-    el.style.top = (py - stackOffset) + 'px';
-    el.textContent = bub.text;
-    document.body.appendChild(el);
+    bub._el.style.left = px + 'px';
+    bub._el.style.top = (py - stackOffset) + 'px';
   }
 }
 
