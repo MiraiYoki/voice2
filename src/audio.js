@@ -377,7 +377,7 @@ export function updateMicUI(on) {
   if (!btn || !label) return;
   btn.textContent = on ? '🎤' : '🎧';
   btn.style.background = on ? 'var(--accent-dim)' : 'var(--danger-dim)';
-  label.textContent = on ? '发言中 · 单声道' : '收听中 · 立体声';
+  label.textContent = on ? '发言中' : '收听中';
   label.style.color = on ? 'var(--accent)' : 'var(--danger)';
 }
 

@@ -12,7 +12,7 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
   background:var(--bg);color:var(--text);height:100vh;display:flex;justify-content:center;
   -webkit-font-smoothing:antialiased;overflow:hidden;}
-.app{width:100%;max-width:520px;height:100%;display:flex;flex-direction:column;padding:6px 12px;gap:6px;}
+.app{width:100%;max-width:520px;height:100%;display:flex;flex-direction:column;padding:6px 12px;gap:6px;position:relative;}
 .header{text-align:center;padding:4px 0 0;flex-shrink:0;}
 .header h1{font-size:16px;font-weight:640;letter-spacing:-0.025em;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;}
 .map-wrap{flex:1 1 0;min-height:0;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;position:relative;display:none;}
@@ -62,11 +62,11 @@ input:focus{border-color:var(--accent);}
 .debug-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 .debug-empty{text-align:center;color:var(--text2);font-size:12px;padding:24px;}
 </style>
-  <script type="module" crossorigin src="./assets/index-Bhk-g4nL.js"></script>
+  <script type="module" crossorigin src="./assets/index-DMoXyPqX.js"></script>
 </head>
 <body>
 <div class="app">
-  <div class="header"><h1 id="room-title">空间语音聊天室 <span style="font-size:10px;color:var(--text2);font-weight:400">v3.4.0</span></h1><div style="font-size:10px;color:var(--accent)"><span id="conn-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#e04949;vertical-align:middle;margin-right:4px" title="连接状态"></span><span id="status">输入房间名加入</span></div></div>
+  <div class="header"><h1 id="room-title">空间语音聊天室 <span style="font-size:10px;color:var(--text2);font-weight:400">v3.4.0</span></h1><div style="font-size:10px;color:var(--accent)"><span id="conn-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#e04949;vertical-align:middle;margin-right:4px" title="连接状态"></span><span id="status">输入房间名加入</span></div><button id="btn-leave-top" style="display:none;position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:14px;z-index:10">🚪</button></div>
   <div class="home-panel" id="home-panel"><div class="home-cards">
     <div class="home-card" id="btn-create-room-card"><div class="home-card-ring"><i>＋</i></div><div class="home-card-body"><div class="home-card-title">创建房间</div><div class="home-card-desc">设置名称与密码</div></div></div>
     <div class="home-card" id="btn-find-rooms"><div class="home-card-ring"><i>🔍</i></div><div class="home-card-body"><div class="home-card-title">查找房间</div><div class="home-card-desc">浏览或搜索已有房间</div></div></div>
@@ -76,10 +76,17 @@ input:focus{border-color:var(--accent);}
   <div class="panel" id="room-panel" style="display:none"><div style="display:flex;gap:8px;margin-bottom:8px"><button class="back-btn" id="room-back">← 返回</button><input id="room-search" placeholder="搜索房间..." style="flex:1"><button class="btn btn-secondary" id="btn-refresh-rooms" style="padding:8px 12px;font-size:13px">🔄</button></div><div class="room-empty" id="room-empty">加载中...</div><div id="room-list"></div></div>
   <div class="panel" id="profile-panel" style="display:none"><button class="back-btn" id="profile-back">← 返回</button><div style="text-align:center;padding:16px 0;margin-top:8px"><label for="avatar-upload" style="cursor:pointer"><div id="avatar-preview" style="width:80px;height:80px;border-radius:50%;background:var(--card);border:2px dashed var(--border);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;overflow:hidden">📷</div></label><input type="file" id="avatar-upload" accept="image/*" style="display:none" title="上传头像"><input id="profile-name" placeholder="输入角色名称" maxlength="12"></div></div>
   <div class="map-wrap" id="map-wrap"><canvas id="map-canvas"></canvas></div>
-  <div class="game-bar" id="game-bar"><div class="joystick" id="joystick"><div class="stick" id="joystick-stick"></div></div><div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 14px"><label for="game-avatar-upload" style="cursor:pointer;flex-shrink:0"><div id="self-color" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#5b4dcc,#7c6aee);display:flex;align-items:center;justify-content:center;background-size:cover"></div></label><input type="file" id="game-avatar-upload" accept="image/*" style="display:none" title="上传头像"><div style="flex:1;min-width:0;cursor:pointer" id="self-name-wrap"><div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="self-name">我</div><div style="font-size:11px" id="self-mic">发言中</div></div><button class="btn" id="btn-mic" style="width:48px;height:48px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:20px">🎤</button><button class="btn btn-secondary" id="btn-theme" style="width:36px;height:36px;border-radius:50%;padding:0;display:none;align-items:center;justify-content:center;font-size:14px" title="切换主题">🎨</button><button class="btn btn-secondary" id="btn-leave" style="width:36px;height:36px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center">🚪</button></div></div>
+  <div class="game-bar" id="game-bar"><div class="joystick" id="joystick"><div class="stick" id="joystick-stick"></div></div><div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 14px"><label for="game-avatar-upload" style="cursor:pointer;flex-shrink:0"><div id="self-color" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#5b4dcc,#7c6aee);display:flex;align-items:center;justify-content:center;background-size:cover"></div></label><input type="file" id="game-avatar-upload" accept="image/*" style="display:none" title="上传头像"><div style="flex:1;min-width:0;cursor:pointer" id="self-name-wrap"><div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="self-name">我</div><div style="font-size:11px" id="self-mic">发言中</div></div><button class="btn" id="btn-mic" style="width:48px;height:48px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:20px">🎤</button><button class="btn btn-secondary" id="btn-theme" style="width:36px;height:36px;border-radius:50%;padding:0;display:none;align-items:center;justify-content:center;font-size:14px" title="切换主题">🎨</button><button class="btn btn-secondary" id="btn-menu" style="width:36px;height:36px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px">🔧</button></div></div>
 </div>
 <!-- 主题选择面板 -->
 <div id="theme-panel" style="display:none;position:fixed;bottom:130px;right:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;z-index:150;flex-direction:column;gap:3px"></div>
+<!-- 功能菜单面板 -->
+<div id="menu-panel" style="display:none;position:fixed;bottom:100px;right:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;z-index:150;flex-direction:column;gap:3px">
+<button class="btn btn-secondary" data-menu="sound" style="font-size:11px;padding:6px 12px;text-align:left">🎵 音效</button>
+<button class="btn btn-secondary" data-menu="voice" style="font-size:11px;padding:6px 12px;text-align:left">🎙️ 变声器</button>
+<button class="btn btn-secondary" data-menu="fx" style="font-size:11px;padding:6px 12px;text-align:left">✨ 特效</button>
+<button class="btn btn-secondary" data-menu="portal" style="font-size:11px;padding:6px 12px;text-align:left">🌀 传送门</button>
+</div>
 <!-- 调试面板 -->
 <div class="debug-panel" id="debug-panel">
   <div class="debug-header"><h2>📋 调试日志</h2><button class="btn btn-secondary" id="debug-close" style="padding:4px 10px;font-size:12px">✕</button></div>

@@ -39,9 +39,10 @@ export function joinRoom(asCreator) {
   $('status').textContent = '连接中...';
   $('self-name').textContent = state.profileName || '我';
 
-  // 连接语音 + LWT遗嘱 + 显示主题按钮
+  // 连接语音 + LWT遗嘱 + 显示按钮
   connectLiveKit(roomName);
   setRoomWill(roomName);
+  $('btn-leave-top').style.display = '';
   const tbtn = $('btn-theme');
   if (tbtn) tbtn.style.display = asCreator ? '' : 'none';
   // 填充主题列表
@@ -117,6 +118,7 @@ export function leaveRoom() {
   const dot = $('conn-dot');
   if (dot) { dot.style.display = 'none'; dot.style.background = '#e04949'; }
   $('home-panel').style.display = '';
+  $('btn-leave-top').style.display = 'none';
   const tbtn = $('btn-theme');
   if (tbtn) tbtn.style.display = 'none';
   $('room-title').textContent = '空间语音聊天室';
@@ -208,8 +210,21 @@ export function wireUI() {
 
   // 游戏中按钮
   $('btn-mic').onclick = toggleMic;
-  $('btn-leave').onclick = leaveRoom;
+  $('btn-leave-top').onclick = leaveRoom;
   $('btn-theme').onclick = switchTheme;
+  $('btn-menu').onclick = () => {
+    const p = $('menu-panel');
+    if (p) p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+    // 关闭主题面板
+    const tp = $('theme-panel');
+    if (tp) tp.style.display = 'none';
+  };
+  // 菜单面板点击外部关闭
+  document.addEventListener('click', (e) => {
+    const mp = $('menu-panel');
+    if (!mp || mp.style.display !== 'flex') return;
+    if (!mp.contains(e.target) && e.target !== $('btn-menu')) mp.style.display = 'none';
+  });
 
   // 调试面板内部按钮 (btn-debug 已移除, 面板代码保留)
   wireDebugPanel();
