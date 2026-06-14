@@ -318,13 +318,13 @@ function showThemeModal() {
 
 // ── 9i. 音效浏览器 (多级目录, 居中弹窗) ──
 const SFX_TREE = [
-  { name:'人物动作', children:[
+  { name:'一、人物动作音效', children:[
     { name:'移动类', files:['缓步走路','快步走-赶路'] },
-    { name:'肢体接触', files:[] },
+    { name:'.肢体接触拖拽类', files:[] },
     { name:'手部小动作', files:[] },
     { name:'坐卧躺类', files:[] },
   ]},
-  { name:'武器械斗', children:[
+  { name:'三、武器械斗音效', children:[
     { name:'冷兵器', children:[
       { name:'刀剑', files:['出鞘','收剑','刺击','砍下','蓄力劈砍','刀剑碰撞短','刀剑碰撞长'] },
       { name:'鞭子', files:['鞭打一声','鞭打三声'] },
@@ -335,30 +335,30 @@ const SFX_TREE = [
     ]},
     { name:'禁锢器械', files:[] },
   ]},
-  { name:'语音情绪', children:[
-    { name:'基础人声', files:[] },
-    { name:'互动人声', files:[] },
+  { name:'二、语音情绪人声', children:[
+    { name:'1.基础人声', files:[] },
+    { name:'2.互动人声', files:[] },
   ]},
-  { name:'道具生活', children:[
-    { name:'通用小件', files:[] },
-    { name:'古风专属', files:[] },
-    { name:'民国专属', files:[] },
-    { name:'现代专属', files:[] },
-    { name:'未来赛博', files:[] },
+  { name:'四、道具生活物件', children:[
+    { name:'1.通用小件', files:[] },
+    { name:'2.古风专属', files:[] },
+    { name:'3.民国专属', files:[] },
+    { name:'4.现代专属', files:[] },
+    { name:'5.未来赛博科幻', files:[] },
   ]},
-  { name:'环境氛围', children:[
-    { name:'自然环境', files:[] },
-    { name:'室内环境', files:[] },
-    { name:'室外场景', files:[] },
-    { name:'情绪氛围', files:[] },
+  { name:'五、环境氛围音', children:[
+    { name:'1.自然环境', files:[] },
+    { name:'2.室内环境', files:[] },
+    { name:'3.室外场景', files:[] },
+    { name:'4.情绪氛围纯音效', files:[] },
   ]},
-  { name:'场景互动', children:[
-    { name:'门窗墙体', files:[] },
-    { name:'坠落破碎', files:[] },
-    { name:'生死离别', files:[] },
-    { name:'仪式桥段', files:[] },
+  { name:'六、场景互动特殊剧情', children:[
+    { name:'1.门窗墙体', files:[] },
+    { name:'2.坠落破碎坍塌', files:[] },
+    { name:'3.生死离别高光', files:[] },
+    { name:'4.仪式特殊桥段', files:[] },
   ]},
-  { name:'动物音效', files:[] },
+  { name:'七、动物音效', files:[] },
 ];
 
 let _sfxStack = []; // 目录栈
