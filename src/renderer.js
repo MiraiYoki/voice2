@@ -185,37 +185,49 @@ export function drawMap() {
   requestAnimationFrame(drawMap);
 }
 
-// ── 聊天气泡渲染 ──
+// ── 聊天气泡渲染 (堆叠, 15s渐消上移) ──
 function renderChatBubbles() {
   const wrap = document.getElementById('map-wrap');
   if (!wrap) return;
   const now = Date.now();
   const bubbles = state._chatBubbles || [];
 
-  // 清理过期气泡 (>5s)
+  // 清理过期 (>15s)
   for (let i = bubbles.length - 1; i >= 0; i--) {
-    if (now - bubbles[i].t > 5000) bubbles.splice(i, 1);
+    if (now - bubbles[i].t > 15000) bubbles.splice(i, 1);
   }
 
   // 清理旧 DOM
   wrap.querySelectorAll('.chat-bubble').forEach(el => el.remove());
 
-  // 渲染当前气泡
+  // 按 pid 分组, 计算层叠偏移
+  const groups = {};
+  for (const bub of bubbles) {
+    if (!groups[bub.pid]) groups[bub.pid] = [];
+    groups[bub.pid].push(bub);
+  }
+
   for (const bub of bubbles) {
     let px, py;
     if (bub.pid === state.myPeerId) {
       const sp = w2s(state.myPos.x, state.myPos.y);
-      px = sp.x; py = sp.y - 40;
+      px = sp.x; py = sp.y - 55;
     } else {
       const p = state.peers.get(bub.pid);
       if (!p) continue;
       const sp = w2s(p.x, p.y);
-      px = sp.x; py = sp.y - 40;
+      px = sp.x; py = sp.y - 55;
     }
+    // 层叠偏移: 同pid的旧气泡上移
+    const pidBubs = groups[bub.pid] || [bub];
+    const idx = pidBubs.indexOf(bub);
+    const stackOffset = (pidBubs.length - 1 - idx) * 28;
+
     const el = document.createElement('div');
     el.className = 'chat-bubble';
     el.style.left = px + 'px';
-    el.style.top = py + 'px';
+    el.style.top = (py - stackOffset) + 'px';
+    el.style.animationDuration = '15s';
     el.textContent = bub.text;
     wrap.appendChild(el);
   }
