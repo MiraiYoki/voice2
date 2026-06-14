@@ -225,7 +225,7 @@ function fillMenuPanel() {
   if (!panel) return;
   const items = [
     { id:'music', icon:'🎼', label:'音乐' },
-    { id:'sound', icon:'🎵', label:'音效' },
+    { id:'sfx', icon:'🔊', label:'音效' },
     { id:'voice', icon:'🎙️', label:'变声器' },
     { id:'fx', icon:'✨', label:'特效' },
     { id:'portal', icon:'🌀', label:'传送门' },
@@ -236,6 +236,7 @@ function fillMenuPanel() {
     b.onclick = () => {
       if (b.dataset.menu === 'theme') showThemeModal();
       else if (b.dataset.menu === 'music') toggleMusicPlayer();
+      else if (b.dataset.menu === 'sfx') openSfxBrowser();
       else toast(b.textContent + ' (即将推出)');
       panel.style.display = 'none';
     };
@@ -313,6 +314,126 @@ function showThemeModal() {
   });
   modal.style.display = 'flex'; backdrop.style.display = 'block';
   backdrop.onclick = () => { modal.style.display = 'none'; backdrop.style.display = 'none'; };
+}
+
+// ── 9i. 音效浏览器 (多级目录, 居中弹窗) ──
+const SFX_TREE = [
+  { name:'人物动作', children:[
+    { name:'移动类', files:['缓步走路','快步走-赶路'] },
+    { name:'肢体接触', files:[] },
+    { name:'手部小动作', files:[] },
+    { name:'坐卧躺类', files:[] },
+  ]},
+  { name:'武器械斗', children:[
+    { name:'冷兵器', children:[
+      { name:'刀剑', files:['出鞘','收剑','刺击','砍下','蓄力劈砍','刀剑碰撞短','刀剑碰撞长'] },
+      { name:'鞭子', files:['鞭打一声','鞭打三声'] },
+    ]},
+    { name:'热武器', children:[
+      { name:'手枪', files:['拔枪','上膛','单发枪声','连射'] },
+      { name:'炸弹', files:['爆炸'] },
+    ]},
+    { name:'禁锢器械', files:[] },
+  ]},
+  { name:'语音情绪', children:[
+    { name:'基础人声', files:[] },
+    { name:'互动人声', files:[] },
+  ]},
+  { name:'道具生活', children:[
+    { name:'通用小件', files:[] },
+    { name:'古风专属', files:[] },
+    { name:'民国专属', files:[] },
+    { name:'现代专属', files:[] },
+    { name:'未来赛博', files:[] },
+  ]},
+  { name:'环境氛围', children:[
+    { name:'自然环境', files:[] },
+    { name:'室内环境', files:[] },
+    { name:'室外场景', files:[] },
+    { name:'情绪氛围', files:[] },
+  ]},
+  { name:'场景互动', children:[
+    { name:'门窗墙体', files:[] },
+    { name:'坠落破碎', files:[] },
+    { name:'生死离别', files:[] },
+    { name:'仪式桥段', files:[] },
+  ]},
+  { name:'动物音效', files:[] },
+];
+
+let _sfxStack = []; // 目录栈
+
+function openSfxBrowser() {
+  _sfxStack = [];
+  showSfxLevel(SFX_TREE);
+}
+
+function showSfxLevel(nodes) {
+  const modal = $('theme-modal');
+  const backdrop = $('modal-backdrop');
+  if (!modal || !backdrop) return;
+  modal.style.display = 'flex';
+  backdrop.style.display = 'block';
+  backdrop.onclick = () => { modal.style.display = 'none'; backdrop.style.display = 'none'; };
+
+  const path = _sfxStack.map(n => n.name).join(' › ') || '音效库';
+  let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+  if (_sfxStack.length > 0) {
+    html += '<button id="sfx-back" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:12px">← 返回</button>';
+  }
+  html += '<h3 style="font-size:14px;margin:0">🔊 ' + path + '</h3>';
+  html += '<button id="sfx-close" style="margin-left:auto;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:12px">✕</button></div>';
+
+  for (const node of nodes) {
+    const hasFiles = node.files && node.files.length > 0;
+    const hasChildren = node.children && node.children.length > 0;
+    if (hasFiles) {
+      html += '<div style="font-size:12px;font-weight:600;color:var(--accent);margin:6px 0 2px">' + node.name + '</div>';
+      for (const f of node.files) {
+        // 构建文件路径: sfx/顶层/子层/.../文件名.mp3
+        const segs = _sfxStack.map(n => n.name);
+        segs.push(node.name);
+        const src = 'sfx/' + segs.join('/') + '/' + f + '.mp3';
+        html += '<button data-sfx="' + src + '" style="display:block;width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:11px;cursor:pointer;text-align:left;margin-bottom:2px">🔊 ' + f + '</button>';
+      }
+    }
+    if (hasChildren) {
+      html += '<button class="sfx-dir" style="display:block;width:100%;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;text-align:left;margin-bottom:2px">📁 ' + node.name + '</button>';
+    } else if (!hasFiles) {
+      html += '<div style="font-size:11px;color:var(--text2);padding:4px 8px">' + node.name + ' (空)</div>';
+    }
+  }
+  modal.innerHTML = html;
+
+  // wire buttons
+  const backBtn = document.getElementById('sfx-back');
+  if (backBtn) backBtn.onclick = () => { _sfxStack.pop(); showSfxLevel(_sfxStack.length === 0 ? SFX_TREE : _sfxStack[_sfxStack.length-1].children); };
+  const closeBtn = document.getElementById('sfx-close');
+  if (closeBtn) closeBtn.onclick = () => { modal.style.display = 'none'; backdrop.style.display = 'none'; };
+
+  modal.querySelectorAll('.sfx-dir').forEach(btn => {
+    const nodeName = btn.textContent.replace('📁 ','');
+    const node = nodes.find(n => n.name === nodeName);
+    btn.onclick = () => { _sfxStack.push(node); showSfxLevel(node.children); };
+  });
+  modal.querySelectorAll('[data-sfx]').forEach(btn => {
+    btn.onclick = () => { playSfx(btn.dataset.sfx); };
+  });
+}
+
+function playSfx(src) {
+  const el = document.createElement('audio');
+  el.src = src;
+  el.volume = 0.5;
+  el.play().catch(() => {});
+  // 广播给其他人
+  if (state._lkRoom && state._lkRoom.localParticipant) {
+    const enc = new TextEncoder();
+    state._lkRoom.localParticipant.publishData(
+      enc.encode(JSON.stringify({ channelId:'sfx', payload:{ src } })),
+      { reliable: true }
+    );
+  }
 }
 
 // ── 9g. 聊天 ──

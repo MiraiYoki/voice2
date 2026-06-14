@@ -115,6 +115,16 @@ function onDataReceived(data, participant) {
       if (msg.payload?.text) addChatBubble(pid, msg.payload.text);
       return;
     }
+    // 音效通道
+    if (msg.channelId === 'sfx') {
+      if (msg.payload?.src) {
+        const el = document.createElement('audio');
+        el.src = msg.payload.src;
+        el.volume = 0.5;
+        el.play().catch(()=>{});
+      }
+      return;
+    }
     // 音乐同步通道
     if (msg.channelId === 'music') {
       const d = msg.payload;
