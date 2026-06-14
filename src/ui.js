@@ -338,11 +338,7 @@ function showThemeModal() {
       if (!t) return;
       state.mapTheme = t.id;
       try { localStorage.setItem('voice-map-theme', t.id); } catch(e) {}
-      state.mapImg.src = t.src;
-      state.mapImg.onload = () => {
-        state.worldW = state.mapImg.naturalWidth || 1600; state.worldH = state.mapImg.naturalHeight || 1200;
-        state.myPos.x = state.worldW / 2; state.myPos.y = state.worldH / 2;
-      };
+      import('./renderer.js').then(m => m.loadMapImage(t.src));
       toast('主题: ' + t.name);
       // 全房间同步
       broadcast('theme', { map: t.id });

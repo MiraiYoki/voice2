@@ -8,6 +8,22 @@ import { state } from './state.js';
 import { $, shadeColor } from './utils.js';
 import { DR_MAX_TIME, DR_BLEND_SPEED } from './config.js';
 
+// 地图加载 (统一入口, 带fallback)
+export function loadMapImage(src) {
+  state.mapImg.onerror = () => {};
+  state.mapImg.src = src;
+  state.mapImg.onload = () => {
+    state.worldW = state.mapImg.naturalWidth || 1600;
+    state.worldH = state.mapImg.naturalHeight || 1200;
+    state.myPos.x = state.worldW / 2;
+    state.myPos.y = state.worldH / 2;
+  };
+  state.mapImg.onerror = () => {
+    state.worldW = 1600; state.worldH = 1200;
+    state.myPos.x = 800; state.myPos.y = 600;
+  };
+}
+
 // ── 6a. 坐标转换 & 相机 ──
 export function resizeCanvas() {
   const wrap = $('map-wrap');

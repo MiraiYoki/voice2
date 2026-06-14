@@ -34,6 +34,7 @@ function init() {
   const theme = MAP_THEMES.find(t => t.id === state.mapTheme) || MAP_THEMES[0];
 
   state.mapImg = new Image();
+  state.mapImg.onerror = () => { state.worldW = 1600; state.worldH = 1200; state.myPos.x = 800; state.myPos.y = 600; };
   state.mapImg.src = theme.src;
   state.mapImg.onload = () => {
     state.worldW = state.mapImg.naturalWidth || 1600;

@@ -10,6 +10,7 @@ import { ROOM_SIZE, COLORS } from './config.js';
 import { updateSpatialAudio } from './audio.js';
 import { addChatBubble } from './utils.js';
 import { MUSIC_PLAYLIST, MAP_THEMES } from './config.js';
+import { loadMapImage } from './renderer.js';
 import { triggerEffect } from './effects.js';
 
 const textEncoder = new TextEncoder();
@@ -126,16 +127,7 @@ function onDataReceived(data, participant) {
     // 主题同步通道
     if (msg.channelId === 'theme') {
       const t = MAP_THEMES.find(th => th.id === msg.payload?.map);
-      if (t) {
-        state.mapTheme = t.id;
-        state.mapImg.src = t.src;
-        state.mapImg.onload = () => {
-          state.worldW = state.mapImg.naturalWidth || 1600;
-          state.worldH = state.mapImg.naturalHeight || 1200;
-          state.myPos.x = state.worldW / 2;
-          state.myPos.y = state.worldH / 2;
-        };
-      }
+      if (t) { state.mapTheme = t.id; loadMapImage(t.src); }
       return;
     }
     // 特效通道
