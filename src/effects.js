@@ -6,7 +6,7 @@ import { state } from './state.js';
 import { $ } from './utils.js';
 
 let canvas, ctx, particles = [], running = false, effectName = '';
-let _fxTimer = null, _fxInterval = null;
+let _fxTimer = null, _fxInterval = null, _meteorTimer = null;
 const MAX_PARTICLES = 200;
 
 export function initEffects() {
@@ -23,83 +23,103 @@ export function resizeFx() {
 }
 
 export function triggerEffect(name) {
-  // 互斥保护: 停掉旧特效
   if (_fxTimer) { clearTimeout(_fxTimer); _fxTimer = null; }
   if (_fxInterval) { clearInterval(_fxInterval); _fxInterval = null; }
+  if (_meteorTimer) { clearInterval(_meteorTimer); _meteorTimer = null; }
   running = false;
   particles = [];
   effectName = name;
   running = true;
   canvas.style.display = 'block';
   spawnParticles(name);
-  _fxTimer = setTimeout(() => { running = false; canvas.style.display = 'none'; particles = []; _fxTimer = null; }, 6000);
+  _fxTimer = setTimeout(() => { running = false; canvas.style.display = 'none'; particles = []; _fxTimer = null; }, 15000);
 }
 
-// ── 粒子生成 (上限保护) ──
 function spawnParticles(name) {
   if (!running || particles.length >= MAX_PARTICLES) return;
   const w = canvas.width, h = canvas.height;
+
+  if (name === 'meteor') {
+    // 单个流星: 左上区域出发，向右下滑落
+    if (particles.length >= 30) return; // 流星上限少一些
+    const fromLeft = Math.random() * w * 0.6;
+    particles.push({
+      x: fromLeft, y: -10 - Math.random() * 60,
+      vx: 0.8 + Math.random() * 1.2, vy: 1.5 + Math.random() * 2,
+      r: 1 + Math.random() * 2, len: 60 + Math.random() * 50,
+      color: '#fbbf24', life: 1, trail: [],
+    });
+    return;
+  }
+
+  if (name === 'firework') {
+    // 升空火箭: 从底部随机位置出发，竖直上升
+    const launchX = w * 0.2 + Math.random() * w * 0.6;
+    const colors = ['#f472b6','#fb923c','#fbbf24','#a3e635','#38bdf8','#c084fc'];
+    const burstColor = colors[Math.floor(Math.random()*colors.length)];
+    particles.push({
+      x: launchX, y: h + 10,
+      vx: (Math.random()-0.5) * 0.5, vy: -4 - Math.random() * 3,
+      r: 2.5, life: 1, burstColor, phase: 'rise', // 'rise'→'burst'
+      burstY: h * 0.15 + Math.random() * h * 0.35,
+      friction: 1,
+    });
+    return;
+  }
+
   const count = Math.min(80, MAX_PARTICLES - particles.length);
   for (let i = 0; i < count; i++) {
     switch (name) {
-      case 'petal': // 花瓣雨
+      case 'petal':
         particles.push({
           x: Math.random() * w, y: -10 - Math.random() * h,
-          vx: (Math.random() - 0.5) * 1.2, vy: 1 + Math.random() * 2,
-          r: 3 + Math.random() * 4, rot: Math.random() * Math.PI * 2, rotV: (Math.random() - 0.5) * 0.1,
+          vx: (Math.random() - 0.5) * 0.7, vy: 0.6 + Math.random() * 1.2,
+          r: 3 + Math.random() * 4, rot: Math.random() * Math.PI * 2, rotV: (Math.random() - 0.5) * 0.06,
           color: ['#f472b6','#fb7185','#f9a8d4','#fda4af','#fbcfe8'][Math.floor(Math.random()*5)],
           life: 1,
         });
         break;
-      case 'meteor': // 金色流星
-        const angle = Math.random() * Math.PI * 0.5 + Math.PI * 0.25;
-        const speed = 5 + Math.random() * 10;
-        particles.push({
-          x: Math.random() * w, y: Math.random() * h * 0.3,
-          vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-          r: 1 + Math.random() * 2, len: 40 + Math.random() * 60,
-          color: '#fbbf24', life: 1, trail: [],
-        });
-        break;
-      case 'snow': // 雪花
+      case 'snow':
         particles.push({
           x: Math.random() * w, y: -10 - Math.random() * h,
-          vx: (Math.random() - 0.5) * 0.5, vy: 0.5 + Math.random() * 1.5,
-          r: 2 + Math.random() * 4, rot: 0, rotV: (Math.random() - 0.5) * 0.03,
+          vx: (Math.random() - 0.5) * 0.3, vy: 0.3 + Math.random() * 0.9,
+          r: 2 + Math.random() * 4, rot: 0, rotV: (Math.random() - 0.5) * 0.02,
           color: '#fff', life: 1,
         });
         break;
-      case 'firefly': // 萤火虫
+      case 'firefly':
         particles.push({
           x: Math.random() * w, y: Math.random() * h,
-          vx: (Math.random() - 0.5) * 0.8, vy: -0.3 - Math.random() * 1,
+          vx: (Math.random() - 0.5) * 0.5, vy: -0.2 - Math.random() * 0.6,
           r: 2 + Math.random() * 3, wPhase: Math.random() * Math.PI * 2,
           color: '#fde047', life: 1,
         });
         break;
-      case 'firework': // 烟花
-        const cx = w * 0.3 + Math.random() * w * 0.4;
-        const cy = h * 0.2 + Math.random() * h * 0.4;
-        const colors = ['#f472b6','#fb923c','#fbbf24','#a3e635','#38bdf8','#c084fc'];
-        for (let j = 0; j < 40; j++) {
-          const a = Math.random() * Math.PI * 2;
-          const spd = 2 + Math.random() * 4;
-          particles.push({
-            x: cx, y: cy,
-            vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-            r: 1.5 + Math.random() * 2, life: 1,
-            color: colors[Math.floor(Math.random() * colors.length)], friction: 0.98,
-          });
-        }
+      case 'firework':
+        // burst particles (legacy, now handled above)
         break;
     }
   }
-  // 持续补充粒子
-  if (['petal','snow','meteor'].includes(name)) {
+  // 持续补充
+  if (['petal','snow'].includes(name)) {
     _fxInterval = setInterval(() => {
       if (!running || effectName !== name) { clearInterval(_fxInterval); _fxInterval = null; return; }
-      if (particles.length < MAX_PARTICLES) for (let i = 0; i < 10; i++) spawnParticles(name);
+      if (particles.length < MAX_PARTICLES) for (let i = 0; i < 8; i++) spawnParticles(name);
     }, 800);
+  }
+  // 流星逐个出现
+  if (name === 'meteor') {
+    _meteorTimer = setInterval(() => {
+      if (!running || effectName !== name) { clearInterval(_meteorTimer); _meteorTimer = null; return; }
+      spawnParticles('meteor');
+    }, 600);
+  }
+  // 烟花连续发射
+  if (name === 'firework') {
+    _fxInterval = setInterval(() => {
+      if (!running || effectName !== name) { clearInterval(_fxInterval); _fxInterval = null; return; }
+      spawnParticles('firework');
+    }, 1500);
   }
 }
 
@@ -115,75 +135,62 @@ export function startFxLoop() {
       const p = particles[i];
       p.x += p.vx;
       p.y += p.vy;
-      if (p.friction) { p.vx *= p.friction; p.vy *= p.friction; }
-      p.life -= 0.002;
+      if (p.friction && p.friction < 1) { p.vx *= p.friction; p.vy *= p.friction; }
+      p.life -= 0.0008; // ~15s
       if (p.life <= 0) { particles.splice(i, 1); continue; }
+
+      // 烟花升空 → 爆炸转换
+      if (p.phase === 'rise' && p.y <= p.burstY) {
+        // 爆炸!
+        const colors = ['#f472b6','#fb923c','#fbbf24','#a3e635','#38bdf8','#c084fc'];
+        for (let j = 0; j < 35; j++) {
+          const a = Math.random() * Math.PI * 2;
+          const spd = 1.5 + Math.random() * 3;
+          particles.push({
+            x: p.x, y: p.y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd,
+            r: 1.5+Math.random()*2, life: 1, color: colors[Math.floor(Math.random()*colors.length)],
+            friction: 0.97, phase: 'burst',
+          });
+        }
+        // 移除火箭
+        particles.splice(i, 1);
+        continue;
+      }
 
       const alpha = p.life < 0.3 ? p.life / 0.3 : 1;
 
       if (effectName === 'petal') {
         p.rot += p.rotV;
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = p.color;
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.rot);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, p.r, p.r * 0.5, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = p.color;
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.beginPath(); ctx.ellipse(0, 0, p.r, p.r*0.5, 0, 0, Math.PI*2); ctx.fill();
         ctx.restore();
       } else if (effectName === 'meteor') {
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = p.r;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x - p.vx / 10 * p.len, p.y - p.vy / 10 * p.len);
-        ctx.stroke();
-        // head glow
-        ctx.fillStyle = '#fff';
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r * 1.5, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = p.color; ctx.lineWidth = p.r;
+        ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx*0.1*p.len, p.y - p.vy*0.1*p.len); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.shadowBlur = 15;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r*1.5, 0, Math.PI*2); ctx.fill();
         ctx.restore();
       } else if (effectName === 'snow') {
         p.rot += p.rotV;
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.7;
-        ctx.fillStyle = p.color;
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.rot);
-        // draw snowflake (6-pointed)
-        for (let k = 0; k < 6; k++) {
-          ctx.rotate(Math.PI / 3);
-          ctx.fillRect(-p.r * 0.3, -p.r, p.r * 0.6, p.r * 2);
-        }
+        ctx.save(); ctx.globalAlpha = alpha*0.7; ctx.fillStyle = p.color;
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        for (let k=0;k<6;k++) { ctx.rotate(Math.PI/3); ctx.fillRect(-p.r*0.3,-p.r,p.r*0.6,p.r*2); }
         ctx.restore();
       } else if (effectName === 'firefly') {
-        p.wPhase += 0.05;
-        const glow = 0.3 + 0.7 * Math.abs(Math.sin(p.wPhase));
-        ctx.save();
-        ctx.globalAlpha = alpha * glow;
-        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
-        grad.addColorStop(0, 'rgba(253,224,71,0.8)');
-        grad.addColorStop(0.3, 'rgba(253,224,71,0.3)');
-        grad.addColorStop(1, 'rgba(253,224,71,0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.5, 0, Math.PI * 2); ctx.fill();
+        p.wPhase += 0.05; const glow = 0.3+0.7*Math.abs(Math.sin(p.wPhase));
+        ctx.save(); ctx.globalAlpha = alpha*glow;
+        const grad = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*4);
+        grad.addColorStop(0,'rgba(253,224,71,0.8)'); grad.addColorStop(0.3,'rgba(253,224,71,0.3)'); grad.addColorStop(1,'rgba(253,224,71,0)');
+        ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*4,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*0.5,0,Math.PI*2); ctx.fill();
         ctx.restore();
       } else if (effectName === 'firework') {
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 4;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color; ctx.shadowBlur = 4;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
         ctx.restore();
       }
     }
