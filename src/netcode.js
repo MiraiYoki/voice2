@@ -174,13 +174,16 @@ export function playMusicRemote(songId, ts) {
   stopMusicRemote();
   const el = document.createElement('audio');
   el.src = song.src;
-  el.volume = 0.3;
+  el.volume = 0.25;
   el.loop = true;
-  const delay = Math.max(0, Date.now() - ts) / 1000;
-  el.currentTime = delay % 30;
-  el.play().catch(() => {});
-  state._musicEl = el;
-  state._musicPlaying = true;
+  el.play().then(() => {
+    state._musicEl = el;
+    state._musicPlaying = true;
+  }).catch(e => {
+    // 自动播放被阻止或URL无效
+    console.warn('music play failed:', e.message);
+    el.remove();
+  });
 }
 
 export function stopMusicRemote() {

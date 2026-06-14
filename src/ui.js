@@ -242,30 +242,27 @@ function fillMenuPanel() {
   });
 }
 
-// 音乐播放器 (房主控制, 全场同步)
+// 音乐播放器 (房主控制, 全场同步, 居中弹窗)
 import { MUSIC_PLAYLIST } from './config.js';
 
 function toggleMusicPlayer() {
   if (!state.isRoomCreator) { toast('仅房主可控制音乐'); return; }
-  const mp = $('music-player');
-  if (!mp) return;
-  const isOpen = mp.style.display === 'flex';
-  mp.style.display = isOpen ? 'none' : 'flex';
-  if (!isOpen) {
-    const btn = $('btn-menu');
-    const rect = btn.getBoundingClientRect();
-    mp.style.left = Math.max(4, rect.left - 70) + 'px';
-    mp.style.top = (rect.top - 200) + 'px';
-    mp.style.bottom = 'auto'; mp.style.right = 'auto';
-    mp.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:4px">🎼 音乐 (仅房主)</div>'
-      + MUSIC_PLAYLIST.map(s => '<button class="btn btn-secondary" data-song="'+s.id+'" style="font-size:11px;padding:4px 8px;text-align:left;margin-bottom:2px">'
-        + s.name + '</button>').join('')
-      + '<div style="display:flex;gap:4px;margin-top:4px"><button class="btn" id="btn-music-stop" style="font-size:10px;padding:4px 8px;background:var(--danger)">停止</button></div>';
-    mp.querySelectorAll('[data-song]').forEach(b => {
-      b.onclick = () => sendMusicCmd('play', b.dataset.song);
-    });
-    $('btn-music-stop').onclick = () => sendMusicCmd('stop');
-  }
+  const modal = $('theme-modal');
+  const backdrop = $('modal-backdrop');
+  if (!modal || !backdrop) return;
+  const isOpen = modal.style.display === 'flex';
+  if (isOpen) { modal.style.display = 'none'; backdrop.style.display = 'none'; return; }
+  modal.innerHTML = '<h3>🎼 全场音乐 (仅房主)</h3>'
+    + MUSIC_PLAYLIST.map(s => '<button data-song="'+s.id+'">'+s.name+'</button>').join('')
+    + '<div style="display:flex;gap:4px;margin-top:6px"><button id="btn-music-stop" style="background:var(--danger);padding:6px 12px;border-radius:8px;border:none;color:#fff;cursor:pointer;font-size:11px">⏹ 停止</button></div>';
+  modal.querySelectorAll('[data-song]').forEach(b => {
+    b.onclick = () => { sendMusicCmd('play', b.dataset.song); modal.style.display = 'none'; backdrop.style.display = 'none'; };
+  });
+  const stopBtn = document.getElementById('btn-music-stop');
+  if (stopBtn) stopBtn.onclick = () => { sendMusicCmd('stop'); modal.style.display = 'none'; backdrop.style.display = 'none'; };
+  modal.style.display = 'flex';
+  backdrop.style.display = 'block';
+  backdrop.onclick = () => { modal.style.display = 'none'; backdrop.style.display = 'none'; };
 }
 
 function sendMusicCmd(action, songId) {
@@ -276,11 +273,19 @@ function sendMusicCmd(action, songId) {
     enc.encode(JSON.stringify({ channelId:'music', payload:{ action, songId, ts:now } })),
     { reliable: true }
   );
-  // 自己执行
-  import('./netcode.js').then(m => {
-    if (action === 'play') m.playMusicRemote(songId, now);
-    else if (action === 'stop') m.stopMusicRemote();
-  });
+  // 自己也播放
+  const song = MUSIC_PLAYLIST.find(s => s.id === songId);
+  if (action === 'play' && song) {
+    if (state._musicEl) { try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {} }
+    const el = document.createElement('audio');
+    el.src = song.src;
+    el.volume = 0.3;
+    el.loop = true;
+    el.play().then(() => { state._musicEl = el; state._musicPlaying = true; }).catch(e => toast('音乐加载失败: ' + e.message));
+  } else if (action === 'stop') {
+    if (state._musicEl) { try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {} state._musicEl = null; }
+    state._musicPlaying = false;
+  }
 }
 
 // ── 9f. 主题弹窗 ──
