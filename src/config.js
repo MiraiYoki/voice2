@@ -52,12 +52,12 @@ export const DR_MAX_TIME = 500;    // 超过此时间无更新 → 冻结
 export const DR_BLEND_SPEED = 0.15; // 从推算位置回弹到真实位置的速度
 
 // 全场音乐歌单 (房主播放, 所有人同步)
-// 替换为你的音乐URL (建议MP3/OGG, 文件不要太大)
+// 把mp3放进 public/music/ 文件夹, 然后改下面的src
 export const MUSIC_PLAYLIST = [
-  { id:'ambient1', name:'氛围·星空', src:'https://cdn.pixabay.com/audio/2022/10/25/audio_946bc3efc0.mp3' },
-  { id:'ambient2', name:'氛围·森林', src:'https://cdn.pixabay.com/audio/2022/03/10/audio_c6d2e9b3c5.mp3' },
-  { id:'peace1', name:'宁静·钢琴', src:'https://cdn.pixabay.com/audio/2023/05/23/audio_7f1c3ca5f2.mp3' },
-  { id:'sad1', name:'情感·悲伤', src:'https://cdn.pixabay.com/audio/2022/10/18/audio_7c9f7d4c1b.mp3' },
-  { id:'tense1', name:'紧张·悬疑', src:'https://cdn.pixabay.com/audio/2022/03/15/audio_8a3e5b1f2c.mp3' },
-  { id:'warm1', name:'温暖·治愈', src:'https://cdn.pixabay.com/audio/2022/11/22/audio_a4d76fbc2e.mp3' },
+  { id:'ambient1', name:'氛围·星空', src:'music/ambient-stars.mp3' },
+  { id:'ambient2', name:'氛围·森林', src:'music/ambient-forest.mp3' },
+  { id:'peace1', name:'宁静·钢琴', src:'music/peace-piano.mp3' },
+  { id:'sad1', name:'情感·悲伤', src:'music/sad-emotion.mp3' },
+  { id:'tense1', name:'紧张·悬疑', src:'music/tense-suspense.mp3' },
+  { id:'warm1', name:'温暖·治愈', src:'music/warm-healing.mp3' },
 ];
