@@ -11,6 +11,7 @@ import { connectRegistry } from './registry.js';
 import { setupJoystick, onKeyDown, onKeyUp, moveTick } from './input.js';
 import { wireUI } from './ui.js';
 import { drawMap, resizeCanvas } from './renderer.js';
+import { initEffects, startFxLoop, resizeFx } from './effects.js';
 
 function init() {
   // ── DOM 缓存初始化 ──
@@ -51,6 +52,8 @@ function init() {
 
   // ── UI 事件绑定 ──
   wireUI();
+  initEffects();
+  startFxLoop();
 
   // ── 角色恢复 ──
   const hpn = $('home-profile-name');

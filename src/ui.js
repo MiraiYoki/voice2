@@ -246,7 +246,7 @@ function fillMenuPanel() {
       if (b.dataset.menu === 'theme') showThemeModal();
       else if (b.dataset.menu === 'music') toggleMusicPlayer();
       else if (b.dataset.menu === 'sfx') openSfxBrowser();
-      else toast(b.textContent + ' (即将推出)');
+      else if (b.dataset.menu === 'fx') openFxMenu();
       panel.style.display = 'none';
     };
   });
@@ -338,7 +338,41 @@ function showThemeModal() {
   backdrop.onclick = () => { modal.style.display = 'none'; backdrop.style.display = 'none'; };
 }
 
-// ── 9i. 音效浏览器 (多级目录, 居中弹窗) ──
+// ── 9i. 特效菜单 ──
+const FX_LIST = [
+  { id:'petal', icon:'🌸', name:'花瓣雨' },
+  { id:'meteor', icon:'🌠', name:'金色流星' },
+  { id:'snow', icon:'❄️', name:'飘雪' },
+  { id:'firefly', icon:'🪲', name:'萤火虫' },
+  { id:'firework', icon:'🎆', name:'烟花' },
+];
+
+function openFxMenu() {
+  const modal = $('theme-modal');
+  const backdrop = $('modal-backdrop');
+  if (!modal || !backdrop) return;
+  modal.innerHTML = '<h3>✨ 特效</h3>'
+    + FX_LIST.map(f => '<button data-fx="'+f.id+'">'+f.icon+' '+f.name+'</button>').join('');
+  modal.querySelectorAll('button').forEach(b => {
+    b.onclick = () => { broadcastFx(b.dataset.fx); modal.style.display = 'none'; backdrop.style.display = 'none'; };
+  });
+  modal.style.display = 'flex';
+  backdrop.style.display = 'block';
+  backdrop.onclick = () => { modal.style.display = 'none'; backdrop.style.display = 'none'; };
+}
+
+function broadcastFx(fxId) {
+  import('./effects.js').then(m => m.triggerEffect(fxId));
+  if (state._lkRoom && state._lkRoom.localParticipant) {
+    const enc = new TextEncoder();
+    state._lkRoom.localParticipant.publishData(
+      enc.encode(JSON.stringify({ channelId:'fx', payload:{ fx:fxId } })),
+      { reliable: true }
+    );
+  }
+}
+
+// ── 9j. 音效浏览器 (多级目录, 居中弹窗) ──
 const SFX_TREE = [
   { name:'一、人物动作音效', children:[
     { name:'移动类', files:['缓步走路','快步走-赶路'] },
