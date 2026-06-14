@@ -89,6 +89,13 @@ export function startPositionSync(room) {
   state._dcIntervals.push(sendInterval);
 }
 
+// ── 广播辅助 (与位置同步同格式) ──
+export function broadcast(channelId, payload) {
+  if (!state._lkRoom?.localParticipant) return;
+  const data = textEncoder.encode(JSON.stringify({ channelId, payload }));
+  state._lkRoom.localParticipant.publishData(data, DataPacket_Kind.RELIABLE);
+}
+
 // ── 8c. 数据接收处理 ──
 function onDataReceived(data, participant) {
   try {

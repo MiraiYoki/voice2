@@ -6,8 +6,7 @@ import { state } from './state.js';
 import { $, toast, simpleHash, showPanel, renderAllLogs, addLog, addChatBubble } from './utils.js';
 import { ROOM_SIZE, MAP_THEMES } from './config.js';
 import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking, stopQualityMonitor } from './audio.js';
-import { stopPositionSync } from './netcode.js';
-import { DataPacket_Kind } from 'livekit-client';
+import { stopPositionSync, broadcast } from './netcode.js';
 import { renderRoomList, setRoomWill, clearRoomWill, startRoomHeartbeat, stopRoomHeartbeat } from './registry.js';
 
 // ── 9a. 加入房间 ──
@@ -290,13 +289,8 @@ function toggleMusicPlayer() {
 }
 
 function sendMusicCmd(action, songId) {
-  if (!state._lkRoom || !state._lkRoom.localParticipant) return;
-  const enc = new TextEncoder();
   const now = Date.now();
-  state._lkRoom.localParticipant.publishData(
-    enc.encode(JSON.stringify({ channelId:'music', payload:{ action, songId, ts:now } })),
-    DataPacket_Kind.RELIABLE
-  );
+  broadcast('music', { action, songId, ts:now });
   // 自己也播放
   const song = MUSIC_PLAYLIST.find(s => s.id === songId);
   if (action === 'play' && song) {
@@ -334,13 +328,7 @@ function showThemeModal() {
       };
       toast('主题: ' + t.name);
       // 全房间同步
-      if (state._lkRoom?.localParticipant) {
-        const enc = new TextEncoder();
-        state._lkRoom.localParticipant.publishData(
-          enc.encode(JSON.stringify({ channelId:'theme', payload:{ map:t.id } })),
-          DataPacket_Kind.RELIABLE
-        );
-      }
+      broadcast('theme', { map: t.id });
       modal.style.display = 'none'; backdrop.style.display = 'none';
     };
   });
@@ -373,13 +361,7 @@ function openFxMenu() {
 
 function broadcastFx(fxId) {
   import('./effects.js').then(m => m.triggerEffect(fxId));
-  if (state._lkRoom && state._lkRoom.localParticipant) {
-    const enc = new TextEncoder();
-    state._lkRoom.localParticipant.publishData(
-      enc.encode(JSON.stringify({ channelId:'fx', payload:{ fx:fxId } })),
-      DataPacket_Kind.RELIABLE
-    );
-  }
+  broadcast('fx', { fx: fxId });
 }
 
 // ── 9j. 音效浏览器 (多级目录, 居中弹窗) ──
@@ -498,13 +480,7 @@ function playSfx(src) {
   el.play().catch(() => {});
   _sfxEl = el;
   // 广播给其他人
-  if (state._lkRoom && state._lkRoom.localParticipant) {
-    const enc = new TextEncoder();
-    state._lkRoom.localParticipant.publishData(
-      enc.encode(JSON.stringify({ channelId:'sfx', payload:{ src } })),
-      DataPacket_Kind.RELIABLE
-    );
-  }
+  broadcast('sfx', { src });
 }
 
 // ── 9g. 聊天 ──
@@ -514,15 +490,7 @@ function sendChat() {
   const text = input.value.trim().slice(0, 60);
   input.value = '';
   addChatBubble(state.myPeerId, text);
-  if (state._lkRoom && state._lkRoom.localParticipant) {
-    try {
-      const enc = new TextEncoder();
-      state._lkRoom.localParticipant.publishData(
-        enc.encode(JSON.stringify({ channelId:'chat', payload:{ text } })),
-        DataPacket_Kind.RELIABLE
-      );
-    } catch(e) {}
-  }
+  try { broadcast('chat', { text }); } catch(e) {}
 }
 
 // ── 9h. 调试面板 ──
