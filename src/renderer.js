@@ -187,18 +187,20 @@ export function drawMap() {
 
 // ── 聊天气泡渲染 (堆叠, 15s渐消上移) ──
 function renderChatBubbles() {
-  const wrap = document.getElementById('map-wrap');
+  const wrap = document.querySelector('.app');
   if (!wrap) return;
+  const mapWrap = document.getElementById('map-wrap');
+  const mapRect = mapWrap ? mapWrap.getBoundingClientRect() : null;
   const now = Date.now();
   const bubbles = state._chatBubbles || [];
 
   // 清理过期 (>15s)
   for (let i = bubbles.length - 1; i >= 0; i--) {
-    if (now - bubbles[i].t > 15000) bubbles.splice(i, 1);
+    if (now - bubbles[i].t > 10000) bubbles.splice(i, 1);
   }
 
   // 清理旧 DOM
-  wrap.querySelectorAll('.chat-bubble').forEach(el => el.remove());
+  document.querySelectorAll('.chat-bubble').forEach(el => el.remove());
 
   // 按 pid 分组, 计算层叠偏移
   const groups = {};
@@ -208,17 +210,19 @@ function renderChatBubbles() {
   }
 
   for (const bub of bubbles) {
-    let px, py;
+    let wx, wy;
     if (bub.pid === state.myPeerId) {
-      const sp = w2s(state.myPos.x, state.myPos.y);
-      px = sp.x; py = sp.y - 55;
+      wx = state.myPos.x; wy = state.myPos.y;
     } else {
       const p = state.peers.get(bub.pid);
       if (!p) continue;
-      const sp = w2s(p.x, p.y);
-      px = sp.x; py = sp.y - 55;
+      wx = p.x; wy = p.y;
     }
-    // 层叠偏移: 同pid的旧气泡上移
+    // 世界坐标 → 地图内屏幕坐标 → app内绝对坐标
+    const sp = w2s(wx, wy);
+    const px = (mapRect ? mapRect.left : 0) + sp.x;
+    const py = (mapRect ? mapRect.top : 0) + sp.y - 55;
+    // 层叠偏移
     const pidBubs = groups[bub.pid] || [bub];
     const idx = pidBubs.indexOf(bub);
     const stackOffset = (pidBubs.length - 1 - idx) * 28;
@@ -227,7 +231,6 @@ function renderChatBubbles() {
     el.className = 'chat-bubble';
     el.style.left = px + 'px';
     el.style.top = (py - stackOffset) + 'px';
-    el.style.animationDuration = '15s';
     el.textContent = bub.text;
     wrap.appendChild(el);
   }
