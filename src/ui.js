@@ -88,7 +88,8 @@ export function leaveRoom() {
   state.myPeerId = null;
 
   // 停音乐 + 关麦
-  if (state._musicEl) { try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {} state._musicEl = null; }
+  if (state._musicEl) { try { if (state._musicEl.stop) state._musicEl.stop(); else { state._musicEl.pause(); state._musicEl.remove(); } } catch(e) {} state._musicEl = null; }
+  if (state._musicGain) { try { state._musicGain.disconnect(); } catch(e) {} state._musicGain = null; }
   state._musicPlaying = false;
   if (state.localStream) {
     try { state.localStream.getAudioTracks().forEach(t => t.stop()); } catch (e) {}
@@ -252,17 +253,22 @@ function fillMenuPanel() {
   });
 
   // 音量滑块事件
-  $('vol-music').oninput = function() {
-    state._musicVol = this.value / 100;
-    try { localStorage.setItem('voice-music-vol', state._musicVol); } catch(e) {}
-    if (state._musicEl) state._musicEl.volume = state._musicVol;
-    this.previousElementSibling.textContent = '🎼 音乐 ' + this.value + '%';
+  const vm = $('vol-music');
+  const vs = $('vol-sfx');
+  const updateVol = (type, val) => {
+    const v = val / 100;
+    if (type === 'music') {
+      state._musicVol = v;
+      try { localStorage.setItem('voice-music-vol', v); } catch(e) {}
+      if (state._musicGain) state._musicGain.gain.value = v;
+      else if (state._musicEl?.volume !== undefined) state._musicEl.volume = v;
+    } else {
+      state._sfxVol = v;
+      try { localStorage.setItem('voice-sfx-vol', v); } catch(e) {}
+    }
   };
-  $('vol-sfx').oninput = function() {
-    state._sfxVol = this.value / 100;
-    try { localStorage.setItem('voice-sfx-vol', state._sfxVol); } catch(e) {}
-    this.previousElementSibling.textContent = '🔊 音效 ' + this.value + '%';
-  };
+  if (vm) { vm.oninput = function() { updateVol('music', this.value); this.previousElementSibling.textContent = '🎼 音乐 ' + this.value + '%'; }; vm.onchange = vm.oninput; }
+  if (vs) { vs.oninput = function() { updateVol('sfx', this.value); this.previousElementSibling.textContent = '🔊 音效 ' + this.value + '%'; }; vs.onchange = vs.oninput; }
 }
 
 // 音乐播放器 (房主控制, 全场同步, 居中弹窗)
@@ -294,14 +300,25 @@ function sendMusicCmd(action, songId) {
   // 自己也播放
   const song = MUSIC_PLAYLIST.find(s => s.id === songId);
   if (action === 'play' && song) {
-    if (state._musicEl) { try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {} }
+    if (state._musicEl) { try { if (state._musicEl.stop) state._musicEl.stop(); else { state._musicEl.pause(); state._musicEl.remove(); } } catch(e) {} }
+    if (state._musicGain) { try { state._musicGain.disconnect(); } catch(e) {} state._musicGain = null; }
     const el = document.createElement('audio');
     el.src = song.src;
-    el.volume = state._musicVol;
     el.loop = true;
+    // GainNode 音量控制 (统一接口)
+    if (state.audioCtx) {
+      const srcNode = state.audioCtx.createMediaElementSource(el);
+      const gain = state.audioCtx.createGain();
+      gain.gain.value = state._musicVol;
+      srcNode.connect(gain).connect(state.audioCtx.destination);
+      state._musicGain = gain;
+    } else {
+      el.volume = state._musicVol;
+    }
     el.play().then(() => { state._musicEl = el; state._musicPlaying = true; }).catch(e => toast('音乐加载失败: ' + e.message));
   } else if (action === 'stop') {
-    if (state._musicEl) { try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {} state._musicEl = null; }
+    if (state._musicEl) { try { if (state._musicEl.stop) state._musicEl.stop(); else { state._musicEl.pause(); state._musicEl.remove(); } } catch(e) {} state._musicEl = null; }
+    if (state._musicGain) { try { state._musicGain.disconnect(); } catch(e) {} state._musicGain = null; }
     state._musicPlaying = false;
   }
 }

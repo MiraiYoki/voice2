@@ -142,7 +142,8 @@ const _rawState = {
   _chatBubbles: [],   // [{pid,text,t}] — 聊天气泡
   _musicPlaying: false,  // 音乐播放中
   _musicId: null,        // 当前曲目id
-  _musicEl: null,        // Audio元素引用
+  _musicEl: null,        // Audio元素/BufferSource包装
+  _musicGain: null,      // 音乐音量GainNode
   _sfxEl: null,          // 当前音效Audio元素(互斥)
   _musicVol: 0.25,       // 音乐音量 (localStorage持久化)
   _sfxVol: 0.5,          // 音效音量 (localStorage持久化)

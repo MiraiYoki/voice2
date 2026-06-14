@@ -218,17 +218,19 @@ export function playMusicRemote(songId, ts) {
   if (!song || !state.audioCtx) return;
   stopMusicRemote();
   state.audioCtx.resume();
+  if (state._musicGain) { try { state._musicGain.disconnect(); } catch(e) {} }
   fetch(song.src).then(r => r.arrayBuffer()).then(buf =>
     state.audioCtx.decodeAudioData(buf)
   ).then(audioBuf => {
     const src = state.audioCtx.createBufferSource();
     const gain = state.audioCtx.createGain();
     gain.gain.value = state._musicVol;
+    state._musicGain = gain;
     src.buffer = audioBuf;
     src.loop = true;
     src.connect(gain).connect(state.audioCtx.destination);
     src.start();
-    state._musicEl = { stop: () => { try { src.stop(); src.disconnect(); gain.disconnect(); } catch(e) {} } };
+    state._musicEl = { stop: () => { try { src.stop(); src.disconnect(); gain.disconnect(); state._musicGain = null; } catch(e) {} } };
     state._musicPlaying = true;
   }).catch(e => { console.warn('music play failed:', e.message); });
 }
