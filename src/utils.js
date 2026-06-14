@@ -102,9 +102,17 @@ export function showPanel(name) {
   if (p) p.style.display = '';
 }
 
-// 聊天气泡
+// 聊天气泡 (每人最多4条, 超出挤掉最旧的)
 export function addChatBubble(pid, text) {
   if (!state._chatBubbles) state._chatBubbles = [];
+  // 统计此人现有气泡数
+  const mine = state._chatBubbles.filter(b => b.pid === pid);
+  if (mine.length >= 4) {
+    // 移除最旧的一条
+    const oldest = mine[0];
+    const idx = state._chatBubbles.indexOf(oldest);
+    if (idx !== -1) state._chatBubbles.splice(idx, 1);
+  }
   state._chatBubbles.push({ pid, text, t: Date.now() });
   if (state._chatBubbles.length > 20) state._chatBubbles.shift();
 }
