@@ -123,6 +123,7 @@ const _rawState = {
   // ── 图片 ──
   avatarImg: null,    // new Image() — 由 main.js 初始化
   mapImg:    null,    // new Image() — 由 main.js 初始化
+  mapTheme: 'default', // 房间主题 — localStorage 持久化
 
   // ── LiveKit ──
   _lkRoom: null,

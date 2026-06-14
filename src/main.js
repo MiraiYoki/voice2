@@ -6,7 +6,7 @@
 
 import { state } from './state.js';
 import { $ } from './utils.js';
-import { MAP_IMG } from './config.js';
+import { MAP_THEMES } from './config.js';
 import { connectRegistry } from './registry.js';
 import { setupJoystick, onKeyDown, onKeyUp, moveTick } from './input.js';
 import { wireUI } from './ui.js';
@@ -26,12 +26,15 @@ function init() {
   }
   state.avatarImg.onload = () => { /* render loop 自动刷新 */ };
 
+  // 地图主题 (localStorage 持久化)
+  try { state.mapTheme = localStorage.getItem('voice-map-theme') || 'default'; } catch(e) {}
+  const theme = MAP_THEMES.find(t => t.id === state.mapTheme) || MAP_THEMES[0];
+
   state.mapImg = new Image();
-  state.mapImg.src = MAP_IMG;
+  state.mapImg.src = theme.src;
   state.mapImg.onload = () => {
     state.worldW = state.mapImg.naturalWidth || 1600;
     state.worldH = state.mapImg.naturalHeight || 1200;
-    // 玩家出生在世界中心
     state.myPos.x = state.worldW / 2;
     state.myPos.y = state.worldH / 2;
   };

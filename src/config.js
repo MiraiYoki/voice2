@@ -14,6 +14,14 @@ export const MQTT_URL = MQTT_URLS[0];
 export const ROOM_SIZE = 800;
 export const MAP_IMG = 'map-bg.jpg';
 
+// 房间主题 (房主可切换)
+export const MAP_THEMES = [
+  { id: 'default', name: '默认', src: 'map-bg.jpg' },
+  { id: 'palace', name: '宫廷', src: 'maps/palace.png' },
+  { id: 'courtyard', name: '庭院', src: 'maps/courtyard.png' },
+  { id: 'courtyard-room', name: '庭院房间', src: 'maps/courtyard-room.png' },
+];
+
 // 玩家色板
 export const COLORS = [
   '#4f46e5','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2',

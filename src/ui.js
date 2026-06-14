@@ -4,7 +4,7 @@
 
 import { state } from './state.js';
 import { $, toast, simpleHash, showPanel, renderAllLogs, addLog } from './utils.js';
-import { ROOM_SIZE } from './config.js';
+import { ROOM_SIZE, MAP_THEMES } from './config.js';
 import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking, stopQualityMonitor } from './audio.js';
 import { stopPositionSync } from './netcode.js';
 import { renderRoomList, setRoomWill, clearRoomWill } from './registry.js';
@@ -33,9 +33,11 @@ export function joinRoom(asCreator) {
   $('status').textContent = '连接中...';
   $('self-name').textContent = state.profileName || '我';
 
-  // 连接语音 + LWT遗嘱
+  // 连接语音 + LWT遗嘱 + 显示主题按钮
   connectLiveKit(roomName);
   setRoomWill(roomName);
+  const tbtn = $('btn-theme');
+  if (tbtn) tbtn.style.display = asCreator ? '' : 'none';
 }
 
 // ── 9b. 离开房间 ──
@@ -97,12 +99,34 @@ export function leaveRoom() {
   const dot = $('conn-dot');
   if (dot) { dot.style.display = 'none'; dot.style.background = '#e04949'; }
   $('home-panel').style.display = '';
+  const tbtn = $('btn-theme');
+  if (tbtn) tbtn.style.display = 'none';
   $('room-title').textContent = '空间语音聊天室';
   $('status').textContent = '输入房间名加入';
   toast('已离开房间');
 }
 
-// ── 9c. 头像缩放 ──
+// ── 9c. 房间主题切换 (房主专属) ──
+function switchTheme() {
+  if (!state.isRoomCreator) return;
+  const idx = MAP_THEMES.findIndex(t => t.id === state.mapTheme);
+  const next = MAP_THEMES[(idx + 1) % MAP_THEMES.length];
+  state.mapTheme = next.id;
+  try { localStorage.setItem('voice-map-theme', next.id); } catch(e) {}
+  state.mapImg.src = next.src;
+  state.mapImg.onload = () => {
+    state.worldW = state.mapImg.naturalWidth || 1600;
+    state.worldH = state.mapImg.naturalHeight || 1200;
+    state.myPos.x = state.worldW / 2;
+    state.myPos.y = state.worldH / 2;
+  };
+  toast('主题: ' + next.name);
+  // 只在房间内显示按钮
+  const btn = $('btn-theme');
+  if (btn) btn.title = '当前主题: ' + next.name;
+}
+
+// ── 9d. 头像缩放 ──
 function resizeAndSetAvatar(file) {
   if (!file) return;
   const img = new Image();
@@ -159,6 +183,7 @@ export function wireUI() {
   $('btn-mic').onclick = toggleMic;
   $('btn-leave').onclick = leaveRoom;
   $('btn-debug').onclick = toggleDebugPanel;
+  $('btn-theme').onclick = switchTheme;
 
   // 调试面板内部按钮
   wireDebugPanel();
