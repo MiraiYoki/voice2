@@ -36,16 +36,12 @@ export function joinRoom(asCreator) {
   $('self-name').textContent = state.profileName || '我';
 
   // 连接语音 + LWT遗嘱 + 显示按钮
+  // MQTT 先发布 (用现有连接, 不重连)
+  state.regMqtt.publish('voice-registry/' + roomName,
+    JSON.stringify({ hasPassword, memberCount: 1, _ts: Date.now() }), { retain: true });
+
   connectLiveKit(roomName);
-  setRoomWill(roomName);
   startRoomHeartbeat();
-  // 延迟发布确保MQTT重连完成
-  setTimeout(() => {
-    if (state.regMqtt?.connected) {
-      state.regMqtt.publish('voice-registry/' + roomName,
-        JSON.stringify({ hasPassword, memberCount: 1, _ts: Date.now() }), { retain: true });
-    }
-  }, 500);
   $('btn-leave-top').style.display = '';
 }
 
@@ -91,8 +87,7 @@ export function leaveRoom() {
   state.isRoomCreator = false;
   state.myPeerId = null;
 
-  // 清除LWT遗嘱 + 停音乐 + 关麦
-  clearRoomWill();
+  // 停音乐 + 关麦
   if (state._musicEl) { try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {} state._musicEl = null; }
   state._musicPlaying = false;
   if (state.localStream) {
