@@ -421,11 +421,16 @@ function showSfxLevel(nodes) {
   });
 }
 
+let _sfxEl = null;  // 全局唯一音效元素
+
 function playSfx(src) {
+  // 互斥保护: 停掉上一个
+  if (_sfxEl) { try { _sfxEl.pause(); _sfxEl.remove(); } catch(e) {} _sfxEl = null; }
   const el = document.createElement('audio');
   el.src = src;
   el.volume = 0.5;
   el.play().catch(() => {});
+  _sfxEl = el;
   // 广播给其他人
   if (state._lkRoom && state._lkRoom.localParticipant) {
     const enc = new TextEncoder();

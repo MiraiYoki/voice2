@@ -115,12 +115,14 @@ function onDataReceived(data, participant) {
       if (msg.payload?.text) addChatBubble(pid, msg.payload.text);
       return;
     }
-    // 音效通道
+    // 音效通道 (互斥: 同时只有一个)
     if (msg.channelId === 'sfx') {
       if (msg.payload?.src) {
+        if (state._sfxEl) { try { state._sfxEl.pause(); state._sfxEl.remove(); } catch(e) {} }
         const el = document.createElement('audio');
         el.src = msg.payload.src;
         el.volume = 0.5;
+        state._sfxEl = el;
         el.play().catch(()=>{});
       }
       return;

@@ -143,6 +143,7 @@ const _rawState = {
   _musicPlaying: false,  // 音乐播放中
   _musicId: null,        // 当前曲目id
   _musicEl: null,        // Audio元素引用
+  _sfxEl: null,          // 当前音效Audio元素(互斥)
 
   // ── DOM 缓存 (初始化在 main.js) ──
   dom: {
