@@ -180,7 +180,7 @@ export function wireUI() {
     const btn = $('btn-menu');
     const rect = btn.getBoundingClientRect();
     p.style.left = Math.max(4, rect.left - 70) + 'px';
-    p.style.top = (rect.top - p.offsetHeight - 6) + 'px';
+    p.style.top = (rect.top - p.offsetHeight - 16) + 'px';
     p.style.bottom = 'auto'; p.style.right = 'auto';
     p.style.visibility = 'visible';
   };
