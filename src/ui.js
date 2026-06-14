@@ -3,7 +3,7 @@
 // ╚══════════════════════════════════════════╝
 
 import { state } from './state.js';
-import { $, toast, simpleHash, showPanel, renderAllLogs, addLog } from './utils.js';
+import { $, toast, simpleHash, showPanel, renderAllLogs, addLog, addChatBubble } from './utils.js';
 import { ROOM_SIZE, MAP_THEMES } from './config.js';
 import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking, stopQualityMonitor } from './audio.js';
 import { stopPositionSync } from './netcode.js';
@@ -43,20 +43,6 @@ export function joinRoom(asCreator) {
   connectLiveKit(roomName);
   setRoomWill(roomName);
   $('btn-leave-top').style.display = '';
-  const tbtn = $('btn-theme');
-  if (tbtn) tbtn.style.display = asCreator ? '' : 'none';
-  // 填充主题列表
-  const tpanel = $('theme-panel');
-  if (tpanel) {
-    tpanel.innerHTML = MAP_THEMES.map(t =>
-      '<button class="btn btn-secondary" data-id="' + t.id
-      + '" style="font-size:11px;padding:6px 12px;text-align:left;background:'
-      + (t.id === state.mapTheme ? 'var(--accent)' : 'var(--card)') + '">' + t.name + '</button>'
-    ).join('');
-    tpanel.querySelectorAll('button').forEach(b => {
-      b.onclick = () => selectTheme(b.dataset.id);
-    });
-  }
 }
 
 // ── 9b. 离开房间 ──
@@ -119,43 +105,12 @@ export function leaveRoom() {
   if (dot) { dot.style.display = 'none'; dot.style.background = '#e04949'; }
   $('home-panel').style.display = '';
   $('btn-leave-top').style.display = 'none';
-  const tbtn = $('btn-theme');
-  if (tbtn) tbtn.style.display = 'none';
   $('room-title').textContent = '空间语音聊天室';
   $('status').textContent = '输入房间名加入';
   toast('已离开房间');
 }
 
-// ── 9c. 房间主题切换 (房主专属, 弹出列表) ──
-function switchTheme() {
-  if (!state.isRoomCreator) return;
-  const panel = $('theme-panel');
-  if (!panel) return;
-  panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
-  // 高亮当前主题
-  panel.querySelectorAll('button').forEach(b => {
-    b.style.background = b.dataset.id === state.mapTheme ? 'var(--accent)' : 'var(--card)';
-  });
-}
-
-function selectTheme(id) {
-  const t = MAP_THEMES.find(th => th.id === id);
-  if (!t) return;
-  state.mapTheme = t.id;
-  try { localStorage.setItem('voice-map-theme', t.id); } catch(e) {}
-  state.mapImg.src = t.src;
-  state.mapImg.onload = () => {
-    state.worldW = state.mapImg.naturalWidth || 1600;
-    state.worldH = state.mapImg.naturalHeight || 1200;
-    state.myPos.x = state.worldW / 2;
-    state.myPos.y = state.worldH / 2;
-  };
-  toast('主题: ' + t.name);
-  const panel = $('theme-panel');
-  if (panel) panel.style.display = 'none';
-}
-
-// ── 9d. 头像缩放 ──
+// ── 9c. 头像缩放 ──
 function resizeAndSetAvatar(file) {
   if (!file) return;
   const img = new Image();
@@ -211,69 +166,130 @@ export function wireUI() {
   // 游戏中按钮
   $('btn-mic').onclick = toggleMic;
   $('btn-leave-top').onclick = leaveRoom;
-  $('btn-theme').onclick = switchTheme;
+
+  // 菜单面板 (动态填充, 定位在按钮上方)
   $('btn-menu').onclick = () => {
     const p = $('menu-panel');
-    if (p) p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
-    // 关闭主题面板
-    const tp = $('theme-panel');
-    if (tp) tp.style.display = 'none';
+    if (!p) return;
+    const isOpen = p.style.display === 'flex';
+    p.style.display = isOpen ? 'none' : 'flex';
+    if (!isOpen) {
+      const btn = $('btn-menu');
+      const rect = btn.getBoundingClientRect();
+      p.style.left = Math.max(0, rect.left - 60) + 'px';
+      p.style.top = (rect.top - p.offsetHeight - 8) + 'px';
+      p.style.bottom = 'auto'; p.style.right = 'auto';
+      fillMenuPanel();
+    }
   };
-  // 菜单面板点击外部关闭
   document.addEventListener('click', (e) => {
     const mp = $('menu-panel');
     if (!mp || mp.style.display !== 'flex') return;
     if (!mp.contains(e.target) && e.target !== $('btn-menu')) mp.style.display = 'none';
   });
 
-  // 调试面板内部按钮 (btn-debug 已移除, 面板代码保留)
+  // 聊天
+  $('btn-chat').onclick = () => {
+    const bar = $('chat-bar');
+    if (bar) { bar.style.display = bar.style.display === 'flex' ? 'none' : 'flex'; $('chat-input').focus(); }
+  };
+  $('btn-chat-send').onclick = sendChat;
+  $('chat-input').onkeydown = e => { if (e.key === 'Enter') sendChat(); };
+
+  // 点击名字改ID
+  $('self-name').onclick = () => {
+    const name = prompt('修改角色名称', state.profileName || '');
+    if (name === null) return;
+    state.profileName = name.trim().slice(0,12);
+    localStorage.setItem('voice-profile-name', state.profileName);
+    $('self-name').textContent = state.profileName || '我';
+    const hpn = $('home-profile-name');
+    if (hpn) hpn.textContent = state.profileName || '未设置角色';
+  };
+
   wireDebugPanel();
 
-  // 全局
   window.addEventListener('resize', () => {
-    // resizeCanvas() 由 renderer.js export，此处延迟导入避免循环
     import('./renderer.js').then(m => { m.resizeCanvas(); m.drawMap(); });
   });
   window.addEventListener('beforeunload', () => { if (state.currentRoom) leaveRoom(); });
 }
 
-// ── 9e. 调试面板 ──
-function toggleDebugPanel() {
-  const panel = $('debug-panel');
+// ── 9e. 菜单面板 ──
+function fillMenuPanel() {
+  const panel = $('menu-panel');
   if (!panel) return;
-  const isOpen = panel.style.display === 'flex';
-  panel.style.display = isOpen ? 'none' : 'flex';
-  if (!isOpen) {
-    renderAllLogs('all');
-    // 高亮"全部"按钮
-    $('debug-filter-all').style.background = 'var(--accent)';
+  const items = [
+    { id:'sound', icon:'🎵', label:'音效' },
+    { id:'voice', icon:'🎙️', label:'变声器' },
+    { id:'fx', icon:'✨', label:'特效' },
+    { id:'portal', icon:'🌀', label:'传送门' },
+  ];
+  if (state.isRoomCreator) items.push({ id:'theme', icon:'🗺️', label:'切换地图' });
+  panel.innerHTML = items.map(i => '<button style="padding:6px 12px;border-radius:8px;border:none;background:var(--card);color:var(--text);font-size:12px;cursor:pointer;text-align:left" data-menu="'+i.id+'">'+i.icon+' '+i.label+'</button>').join('');
+  panel.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      if (b.dataset.menu === 'theme') showThemeModal();
+      else toast(b.textContent + ' (即将推出)');
+      panel.style.display = 'none';
+    };
+  });
+}
+
+// ── 9f. 主题弹窗 ──
+function showThemeModal() {
+  const modal = $('theme-modal');
+  const backdrop = $('modal-backdrop');
+  if (!modal || !backdrop) return;
+  modal.innerHTML = '<h3>🗺️ 选择主题</h3>'
+    + MAP_THEMES.map(t => '<button style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px;cursor:pointer;text-align:center;'
+      + (t.id===state.mapTheme?'background:var(--accent);border-color:var(--accent);':'')
+      + '" data-theme="'+t.id+'">'+t.name+'</button>').join('');
+  modal.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      const t = MAP_THEMES.find(th => th.id === b.dataset.theme);
+      if (!t) return;
+      state.mapTheme = t.id;
+      try { localStorage.setItem('voice-map-theme', t.id); } catch(e) {}
+      state.mapImg.src = t.src;
+      state.mapImg.onload = () => {
+        state.worldW = state.mapImg.naturalWidth || 1600; state.worldH = state.mapImg.naturalHeight || 1200;
+        state.myPos.x = state.worldW / 2; state.myPos.y = state.worldH / 2;
+      };
+      toast('主题: ' + t.name); modal.style.display = 'none'; backdrop.style.display = 'none';
+    };
+  });
+  modal.style.display = 'flex'; backdrop.style.display = 'block';
+  backdrop.onclick = () => { modal.style.display = 'none'; backdrop.style.display = 'none'; };
+}
+
+// ── 9g. 聊天 ──
+function sendChat() {
+  const input = $('chat-input');
+  if (!input || !input.value.trim()) return;
+  const text = input.value.trim().slice(0, 60);
+  input.value = '';
+  addChatBubble(state.myPeerId, text);
+  if (state._lkRoom && state._lkRoom.localParticipant) {
+    try {
+      const enc = new TextEncoder();
+      state._lkRoom.localParticipant.publishData(
+        enc.encode(JSON.stringify({ channelId:'chat', payload:{ text } })),
+        { reliable: true }
+      );
+    } catch(e) {}
   }
 }
 
+// ── 9h. 调试面板 ──
 function wireDebugPanel() {
-  const btns = {
-    'debug-filter-all': 'all',
-    'debug-filter-conn': 'conn',
-    'debug-filter-audio': 'audio',
-    'debug-filter-pos': 'pos',
-    'debug-filter-avatar': 'avatar',
-  };
+  const btns = { 'debug-filter-all':'all','debug-filter-conn':'conn','debug-filter-audio':'audio','debug-filter-pos':'pos','debug-filter-avatar':'avatar' };
   for (const [id, cat] of Object.entries(btns)) {
-    const btn = $(id);
-    if (!btn) continue;
+    const btn = $(id); if (!btn) continue;
     btn.onclick = () => {
-      // 重置所有按钮样式
-      Object.keys(btns).forEach(bid => {
-        const b = $(bid);
-        if (b) b.style.background = 'var(--card)';
-      });
-      btn.style.background = 'var(--accent)';
-      renderAllLogs(cat);
+      Object.keys(btns).forEach(bid => { const b = $(bid); if (b) b.style.background = 'var(--card)'; });
+      btn.style.background = 'var(--accent)'; renderAllLogs(cat);
     };
   }
-  $('debug-close').onclick = () => {
-    const panel = $('debug-panel');
-    if (panel) panel.style.display = 'none';
-  };
-
+  $('debug-close').onclick = () => { const p = $('debug-panel'); if (p) p.style.display = 'none'; };
 }

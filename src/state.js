@@ -138,6 +138,7 @@ const _rawState = {
 
   // ── 调试日志 ──
   _logs: [],          // [{t,cat,msg}] — 由 utils.js addLog() 填充
+  _chatBubbles: [],   // [{pid,text,t}] — 聊天气泡
 
   // ── DOM 缓存 (初始化在 main.js) ──
   dom: {

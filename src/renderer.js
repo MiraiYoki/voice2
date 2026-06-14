@@ -178,7 +178,47 @@ export function drawMap() {
 
   // 自己
   drawSelf(ctx);
+
+  // 聊天气泡 DOM
+  renderChatBubbles();
+
   requestAnimationFrame(drawMap);
+}
+
+// ── 聊天气泡渲染 ──
+function renderChatBubbles() {
+  const wrap = document.getElementById('map-wrap');
+  if (!wrap) return;
+  const now = Date.now();
+  const bubbles = state._chatBubbles || [];
+
+  // 清理过期气泡 (>5s)
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    if (now - bubbles[i].t > 5000) bubbles.splice(i, 1);
+  }
+
+  // 清理旧 DOM
+  wrap.querySelectorAll('.chat-bubble').forEach(el => el.remove());
+
+  // 渲染当前气泡
+  for (const bub of bubbles) {
+    let px, py;
+    if (bub.pid === state.myPeerId) {
+      const sp = w2s(state.myPos.x, state.myPos.y);
+      px = sp.x; py = sp.y - 40;
+    } else {
+      const p = state.peers.get(bub.pid);
+      if (!p) continue;
+      const sp = w2s(p.x, p.y);
+      px = sp.x; py = sp.y - 40;
+    }
+    const el = document.createElement('div');
+    el.className = 'chat-bubble';
+    el.style.left = px + 'px';
+    el.style.top = py + 'px';
+    el.textContent = bub.text;
+    wrap.appendChild(el);
+  }
 }
 
 // ── 6c. 远程玩家 ──

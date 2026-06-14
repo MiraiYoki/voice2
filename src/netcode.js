@@ -8,6 +8,7 @@ import { DataPacket_Kind } from 'livekit-client';
 import { state } from './state.js';
 import { ROOM_SIZE, COLORS } from './config.js';
 import { updateSpatialAudio } from './audio.js';
+import { addChatBubble } from './utils.js';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -108,6 +109,11 @@ function onDataReceived(data, participant) {
       return;
     }
 
+    // 聊天通道
+    if (msg.channelId === 'chat') {
+      if (msg.payload?.text) addChatBubble(pid, msg.payload.text);
+      return;
+    }
     // 位置通道
     if (msg.channelId !== 'pos') return;
     const d = msg.payload;

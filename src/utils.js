@@ -102,6 +102,13 @@ export function showPanel(name) {
   if (p) p.style.display = '';
 }
 
+// 聊天气泡
+export function addChatBubble(pid, text) {
+  if (!state._chatBubbles) state._chatBubbles = [];
+  state._chatBubbles.push({ pid, text, t: Date.now() });
+  if (state._chatBubbles.length > 20) state._chatBubbles.shift();
+}
+
 // 颜色加深/变浅 (给头像渐变用)
 export function shadeColor(c, pct) {
   const n = parseInt(c.replace('#', ''), 16);
