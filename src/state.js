@@ -140,6 +140,9 @@ const _rawState = {
   // ── 调试日志 ──
   _logs: [],          // [{t,cat,msg}] — 由 utils.js addLog() 填充
   _chatBubbles: [],   // [{pid,text,t}] — 聊天气泡
+  _musicPlaying: false,  // 音乐播放中
+  _musicId: null,        // 当前曲目id
+  _musicEl: null,        // Audio元素引用
 
   // ── DOM 缓存 (初始化在 main.js) ──
   dom: {

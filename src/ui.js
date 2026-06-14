@@ -86,8 +86,10 @@ export function leaveRoom() {
   state.isRoomCreator = false;
   state.myPeerId = null;
 
-  // 清除LWT遗嘱 + 关麦
+  // 清除LWT遗嘱 + 停音乐 + 关麦
   clearRoomWill();
+  if (state._musicEl) { try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {} state._musicEl = null; }
+  state._musicPlaying = false;
   if (state.localStream) {
     try { state.localStream.getAudioTracks().forEach(t => t.stop()); } catch (e) {}
     state.localStream = null;
@@ -222,6 +224,7 @@ function fillMenuPanel() {
   const panel = $('menu-panel');
   if (!panel) return;
   const items = [
+    { id:'music', icon:'🎼', label:'音乐' },
     { id:'sound', icon:'🎵', label:'音效' },
     { id:'voice', icon:'🎙️', label:'变声器' },
     { id:'fx', icon:'✨', label:'特效' },
@@ -232,9 +235,51 @@ function fillMenuPanel() {
   panel.querySelectorAll('button').forEach(b => {
     b.onclick = () => {
       if (b.dataset.menu === 'theme') showThemeModal();
+      else if (b.dataset.menu === 'music') toggleMusicPlayer();
       else toast(b.textContent + ' (即将推出)');
       panel.style.display = 'none';
     };
+  });
+}
+
+// 音乐播放器 (房主控制, 全场同步)
+import { MUSIC_PLAYLIST } from './config.js';
+
+function toggleMusicPlayer() {
+  if (!state.isRoomCreator) { toast('仅房主可控制音乐'); return; }
+  const mp = $('music-player');
+  if (!mp) return;
+  const isOpen = mp.style.display === 'flex';
+  mp.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen) {
+    const btn = $('btn-menu');
+    const rect = btn.getBoundingClientRect();
+    mp.style.left = Math.max(4, rect.left - 70) + 'px';
+    mp.style.top = (rect.top - 200) + 'px';
+    mp.style.bottom = 'auto'; mp.style.right = 'auto';
+    mp.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:4px">🎼 音乐 (仅房主)</div>'
+      + MUSIC_PLAYLIST.map(s => '<button class="btn btn-secondary" data-song="'+s.id+'" style="font-size:11px;padding:4px 8px;text-align:left;margin-bottom:2px">'
+        + s.name + '</button>').join('')
+      + '<div style="display:flex;gap:4px;margin-top:4px"><button class="btn" id="btn-music-stop" style="font-size:10px;padding:4px 8px;background:var(--danger)">停止</button></div>';
+    mp.querySelectorAll('[data-song]').forEach(b => {
+      b.onclick = () => sendMusicCmd('play', b.dataset.song);
+    });
+    $('btn-music-stop').onclick = () => sendMusicCmd('stop');
+  }
+}
+
+function sendMusicCmd(action, songId) {
+  if (!state._lkRoom || !state._lkRoom.localParticipant) return;
+  const enc = new TextEncoder();
+  const now = Date.now();
+  state._lkRoom.localParticipant.publishData(
+    enc.encode(JSON.stringify({ channelId:'music', payload:{ action, songId, ts:now } })),
+    { reliable: true }
+  );
+  // 自己执行
+  import('./netcode.js').then(m => {
+    if (action === 'play') m.playMusicRemote(songId, now);
+    else if (action === 'stop') m.stopMusicRemote();
   });
 }
 

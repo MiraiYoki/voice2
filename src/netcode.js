@@ -9,6 +9,7 @@ import { state } from './state.js';
 import { ROOM_SIZE, COLORS } from './config.js';
 import { updateSpatialAudio } from './audio.js';
 import { addChatBubble } from './utils.js';
+import { MUSIC_PLAYLIST } from './config.js';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -114,6 +115,15 @@ function onDataReceived(data, participant) {
       if (msg.payload?.text) addChatBubble(pid, msg.payload.text);
       return;
     }
+    // 音乐同步通道
+    if (msg.channelId === 'music') {
+      const d = msg.payload;
+      if (d?.action === 'play') playMusicRemote(d.songId, d.ts);
+      else if (d?.action === 'stop') stopMusicRemote();
+      else if (d?.action === 'pause') pauseMusicRemote();
+      else if (d?.action === 'resume') resumeMusicRemote();
+      return;
+    }
     // 位置通道
     if (msg.channelId !== 'pos') return;
     const d = msg.payload;
@@ -155,4 +165,36 @@ function onDataReceived(data, participant) {
 export function stopPositionSync() {
   state._dcIntervals.forEach(clearInterval);
   state._dcIntervals = [];
+}
+
+// ── 8e. 全场音乐同步 ──
+export function playMusicRemote(songId, ts) {
+  const song = MUSIC_PLAYLIST.find(s => s.id === songId);
+  if (!song) return;
+  stopMusicRemote();
+  const el = document.createElement('audio');
+  el.src = song.src;
+  el.volume = 0.3;
+  el.loop = true;
+  const delay = Math.max(0, Date.now() - ts) / 1000;
+  el.currentTime = delay % 30;
+  el.play().catch(() => {});
+  state._musicEl = el;
+  state._musicPlaying = true;
+}
+
+export function stopMusicRemote() {
+  if (state._musicEl) {
+    try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {}
+    state._musicEl = null;
+  }
+  state._musicPlaying = false;
+}
+
+function pauseMusicRemote() {
+  if (state._musicEl) { state._musicEl.pause(); state._musicPlaying = false; }
+}
+
+function resumeMusicRemote() {
+  if (state._musicEl) { state._musicEl.play().catch(()=>{}); state._musicPlaying = true; }
 }
