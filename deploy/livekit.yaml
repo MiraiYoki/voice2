@@ -1,0 +1,14 @@
+# LiveKit Server 配置 v4.0.0
+port: 7880
+rtc:
+  udp_port: 7882
+  tcp_port: 7881
+  use_external_ip: true
+  # 北京服务器公网IP
+  node_ip: 49.233.177.94
+redis:
+  address: redis:6379
+keys:
+  # 生成: livekit-server generate-keys
+  # 临时示例 (部署时替换)
+  APIkeyDev: dev-secret-need-replace
