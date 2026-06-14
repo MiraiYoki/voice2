@@ -105,6 +105,19 @@ export function updateRoomCount() {
   }
 }
 
+// 房间心跳保活 (每60s刷新_ts, 防止被僵尸过滤误杀)
+let _heartbeatTimer = null;
+export function startRoomHeartbeat() {
+  if (_heartbeatTimer) return;
+  _heartbeatTimer = setInterval(() => {
+    if (state.currentRoom) updateRoomCount();
+    else { clearInterval(_heartbeatTimer); _heartbeatTimer = null; }
+  }, 60000);
+}
+export function stopRoomHeartbeat() {
+  if (_heartbeatTimer) { clearInterval(_heartbeatTimer); _heartbeatTimer = null; }
+}
+
 // ── 4d. LWT遗嘱管理 ──
 function _wireBaseHandlers() {
   state.regMqtt.on('connect', () => {

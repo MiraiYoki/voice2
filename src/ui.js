@@ -7,7 +7,7 @@ import { $, toast, simpleHash, showPanel, renderAllLogs, addLog, addChatBubble }
 import { ROOM_SIZE, MAP_THEMES } from './config.js';
 import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking, stopQualityMonitor } from './audio.js';
 import { stopPositionSync } from './netcode.js';
-import { renderRoomList, setRoomWill, clearRoomWill } from './registry.js';
+import { renderRoomList, setRoomWill, clearRoomWill, startRoomHeartbeat, stopRoomHeartbeat } from './registry.js';
 
 // ── 9a. 加入房间 ──
 export function joinRoom(asCreator) {
@@ -42,6 +42,7 @@ export function joinRoom(asCreator) {
   // 连接语音 + LWT遗嘱 + 显示按钮
   connectLiveKit(roomName);
   setRoomWill(roomName);
+  startRoomHeartbeat();
   $('btn-leave-top').style.display = '';
 }
 
@@ -75,10 +76,11 @@ export function leaveRoom() {
   for (const pid of state.peers.keys()) { removePeer(pid); }
   state.peers.clear();
 
-  // 停同步 & ducking & 质量监控 & JWT定时器
+  // 停同步 & ducking & 质量监控 & JWT定时器 & 心跳
   stopPositionSync();
   stopDucking();
   stopQualityMonitor();
+  stopRoomHeartbeat();
   if (state._jwtRefreshTimer) { clearTimeout(state._jwtRefreshTimer); state._jwtRefreshTimer = null; }
 
   // 重置状态
