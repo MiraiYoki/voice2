@@ -6,6 +6,8 @@ import { state } from './state.js';
 import { $ } from './utils.js';
 
 let canvas, ctx, particles = [], running = false, effectName = '';
+let _fxTimer = null, _fxInterval = null;
+const MAX_PARTICLES = 200;
 
 export function initEffects() {
   canvas = $('fx-canvas');
@@ -21,18 +23,23 @@ export function resizeFx() {
 }
 
 export function triggerEffect(name) {
-  effectName = name;
+  // 互斥保护: 停掉旧特效
+  if (_fxTimer) { clearTimeout(_fxTimer); _fxTimer = null; }
+  if (_fxInterval) { clearInterval(_fxInterval); _fxInterval = null; }
+  running = false;
   particles = [];
+  effectName = name;
   running = true;
   canvas.style.display = 'block';
   spawnParticles(name);
-  setTimeout(() => { running = false; canvas.style.display = 'none'; particles = []; }, 6000);
+  _fxTimer = setTimeout(() => { running = false; canvas.style.display = 'none'; particles = []; _fxTimer = null; }, 6000);
 }
 
-// ── 粒子生成 ──
+// ── 粒子生成 (上限保护) ──
 function spawnParticles(name) {
+  if (!running || particles.length >= MAX_PARTICLES) return;
   const w = canvas.width, h = canvas.height;
-  const count = 80;
+  const count = Math.min(80, MAX_PARTICLES - particles.length);
   for (let i = 0; i < count; i++) {
     switch (name) {
       case 'petal': // 花瓣雨
@@ -89,10 +96,9 @@ function spawnParticles(name) {
   }
   // 持续补充粒子
   if (['petal','snow','meteor'].includes(name)) {
-    const iv = setInterval(() => {
-      if (!running || effectName !== name) { clearInterval(iv); return; }
-      // small batch
-      for (let i = 0; i < 10; i++) spawnParticles(name);
+    _fxInterval = setInterval(() => {
+      if (!running || effectName !== name) { clearInterval(_fxInterval); _fxInterval = null; return; }
+      if (particles.length < MAX_PARTICLES) for (let i = 0; i < 10; i++) spawnParticles(name);
     }, 800);
   }
 }
