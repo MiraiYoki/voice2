@@ -53,7 +53,7 @@ input:focus{border-color:var(--accent);}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* 退出按钮 */
-.btn-leave-top{display:none;position:absolute;top:10px;right:8px;background:rgba(224,73,73,0.1);color:var(--danger);border:1px solid rgba(224,73,73,0.3);border-radius:14px;padding:4px 12px;font-size:11px;cursor:pointer;z-index:10;}
+.btn-leave-top{position:absolute;top:10px;right:8px;background:rgba(224,73,73,0.1);color:var(--danger);border:1px solid rgba(224,73,73,0.3);border-radius:14px;padding:4px 12px;font-size:11px;cursor:pointer;z-index:10;}
 
 /* 弹窗面板 */
 .popup-panel{display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;z-index:150;flex-direction:column;gap:3px;min-width:120px;}
@@ -84,7 +84,7 @@ input:focus{border-color:var(--accent);}
 .debug-wrap::-webkit-scrollbar{width:4px;}
 .debug-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 </style>
-  <script type="module" crossorigin src="./assets/index-98fNABfd.js"></script>
+  <script type="module" crossorigin src="./assets/index-CA6q4Ety.js"></script>
 </head>
 <body>
 <div class="app">
@@ -93,7 +93,7 @@ input:focus{border-color:var(--accent);}
     <div style="font-size:10px;color:var(--accent)"><span id="conn-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#e04949;vertical-align:middle;margin-right:4px" title="连接状态"></span><span id="status">输入房间名加入</span></div>
     
   </div>
-  <button class="btn-leave-top" id="btn-leave-top">✕</button>
+  <button class="btn-leave-top" id="btn-leave-top" style="display:none">✕</button>
   <div class="home-panel" id="home-panel"><div class="home-cards">
     <div class="home-card" id="btn-create-room-card"><div class="home-card-ring"><i>＋</i></div><div class="home-card-body"><div class="home-card-title">创建房间</div><div class="home-card-desc">设置名称与密码</div></div></div>
     <div class="home-card" id="btn-find-rooms"><div class="home-card-ring"><i>🔍</i></div><div class="home-card-body"><div class="home-card-title">查找房间</div><div class="home-card-desc">浏览或搜索已有房间</div></div></div>
