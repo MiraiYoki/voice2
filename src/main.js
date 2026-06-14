@@ -28,6 +28,8 @@ function init() {
 
   // 地图主题 (localStorage 持久化)
   try { state.mapTheme = localStorage.getItem('voice-map-theme') || 'default'; } catch(e) {}
+  try { state._musicVol = parseFloat(localStorage.getItem('voice-music-vol')) || 0.25; } catch(e) {}
+  try { state._sfxVol = parseFloat(localStorage.getItem('voice-sfx-vol')) || 0.5; } catch(e) {}
   const theme = MAP_THEMES.find(t => t.id === state.mapTheme) || MAP_THEMES[0];
 
   state.mapImg = new Image();

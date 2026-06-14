@@ -121,7 +121,7 @@ function onDataReceived(data, participant) {
         if (state._sfxEl) { try { state._sfxEl.pause(); state._sfxEl.remove(); } catch(e) {} }
         const el = document.createElement('audio');
         el.src = msg.payload.src;
-        el.volume = 0.5;
+        el.volume = state._sfxVol;
         state._sfxEl = el;
         el.play().catch(()=>{});
       }
@@ -186,7 +186,7 @@ export function playMusicRemote(songId, ts) {
   stopMusicRemote();
   const el = document.createElement('audio');
   el.src = song.src;
-  el.volume = 0.25;
+  el.volume = state._musicVol;
   el.loop = true;
   el.play().then(() => {
     state._musicEl = el;

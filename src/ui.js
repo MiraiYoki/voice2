@@ -231,8 +231,17 @@ function fillMenuPanel() {
     { id:'portal', icon:'🌀', label:'传送门' },
   ];
   if (state.isRoomCreator) items.push({ id:'theme', icon:'🗺️', label:'切换地图' });
-  panel.innerHTML = items.map(i => '<button style="padding:6px 12px;border-radius:8px;border:none;background:var(--card);color:var(--text);font-size:12px;cursor:pointer;text-align:left" data-menu="'+i.id+'">'+i.icon+' '+i.label+'</button>').join('');
-  panel.querySelectorAll('button').forEach(b => {
+  let html = items.map(i => '<button style="padding:6px 12px;border-radius:8px;border:none;background:var(--card);color:var(--text);font-size:12px;cursor:pointer;text-align:left" data-menu="'+i.id+'">'+i.icon+' '+i.label+'</button>').join('');
+  // 音量滑块
+  html += '<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">';
+  html += '<div style="font-size:10px;color:var(--text2);margin-bottom:2px">🎼 音乐 ' + Math.round(state._musicVol*100) + '%</div>';
+  html += '<input type="range" id="vol-music" min="0" max="100" value="' + Math.round(state._musicVol*100) + '" style="width:100%;accent-color:var(--accent)">';
+  html += '<div style="font-size:10px;color:var(--text2);margin-bottom:2px;margin-top:4px">🔊 音效 ' + Math.round(state._sfxVol*100) + '%</div>';
+  html += '<input type="range" id="vol-sfx" min="0" max="100" value="' + Math.round(state._sfxVol*100) + '" style="width:100%;accent-color:var(--accent)">';
+  html += '</div>';
+  panel.innerHTML = html;
+
+  panel.querySelectorAll('button[data-menu]').forEach(b => {
     b.onclick = () => {
       if (b.dataset.menu === 'theme') showThemeModal();
       else if (b.dataset.menu === 'music') toggleMusicPlayer();
@@ -241,6 +250,19 @@ function fillMenuPanel() {
       panel.style.display = 'none';
     };
   });
+
+  // 音量滑块事件
+  $('vol-music').oninput = function() {
+    state._musicVol = this.value / 100;
+    try { localStorage.setItem('voice-music-vol', state._musicVol); } catch(e) {}
+    if (state._musicEl) state._musicEl.volume = state._musicVol;
+    this.previousElementSibling.textContent = '🎼 音乐 ' + this.value + '%';
+  };
+  $('vol-sfx').oninput = function() {
+    state._sfxVol = this.value / 100;
+    try { localStorage.setItem('voice-sfx-vol', state._sfxVol); } catch(e) {}
+    this.previousElementSibling.textContent = '🔊 音效 ' + this.value + '%';
+  };
 }
 
 // 音乐播放器 (房主控制, 全场同步, 居中弹窗)
@@ -280,7 +302,7 @@ function sendMusicCmd(action, songId) {
     if (state._musicEl) { try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {} }
     const el = document.createElement('audio');
     el.src = song.src;
-    el.volume = 0.3;
+    el.volume = state._musicVol;
     el.loop = true;
     el.play().then(() => { state._musicEl = el; state._musicPlaying = true; }).catch(e => toast('音乐加载失败: ' + e.message));
   } else if (action === 'stop') {
@@ -428,7 +450,7 @@ function playSfx(src) {
   if (_sfxEl) { try { _sfxEl.pause(); _sfxEl.remove(); } catch(e) {} _sfxEl = null; }
   const el = document.createElement('audio');
   el.src = src;
-  el.volume = 0.5;
+  el.volume = state._sfxVol;
   el.play().catch(() => {});
   _sfxEl = el;
   // 广播给其他人
