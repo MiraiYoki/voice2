@@ -32,6 +32,27 @@ export function triggerEffect(name) {
   running = true;
   canvas.style.display = 'block';
   spawnParticles(name);
+  // 持续生成 (放这里确保执行, spawnParticles里的return会跳过后续代码)
+  if (['petal','snow'].includes(name)) {
+    _fxInterval = setInterval(() => {
+      if (!running || effectName !== name) { clearInterval(_fxInterval); _fxInterval = null; return; }
+      if (particles.length < MAX_PARTICLES) for (let i = 0; i < 8; i++) spawnParticles(name);
+    }, 800);
+  }
+  if (name === 'meteor') {
+    for (let i = 0; i < 5; i++) spawnParticles('meteor'); // 初始多发几个
+    _meteorTimer = setInterval(() => {
+      if (!running || effectName !== name) { clearInterval(_meteorTimer); _meteorTimer = null; return; }
+      spawnParticles('meteor');
+    }, 600);
+  }
+  if (name === 'firework') {
+    for (let i = 0; i < 3; i++) spawnParticles('firework'); // 初始多发几个火箭
+    _fxInterval = setInterval(() => {
+      if (!running || effectName !== name) { clearInterval(_fxInterval); _fxInterval = null; return; }
+      spawnParticles('firework');
+    }, 1500);
+  }
   _fxTimer = setTimeout(() => { running = false; canvas.style.display = 'none'; particles = []; _fxTimer = null; }, 15000);
 }
 
@@ -100,27 +121,7 @@ function spawnParticles(name) {
         break;
     }
   }
-  // 持续补充
-  if (['petal','snow'].includes(name)) {
-    _fxInterval = setInterval(() => {
-      if (!running || effectName !== name) { clearInterval(_fxInterval); _fxInterval = null; return; }
-      if (particles.length < MAX_PARTICLES) for (let i = 0; i < 8; i++) spawnParticles(name);
-    }, 800);
-  }
-  // 流星逐个出现
-  if (name === 'meteor') {
-    _meteorTimer = setInterval(() => {
-      if (!running || effectName !== name) { clearInterval(_meteorTimer); _meteorTimer = null; return; }
-      spawnParticles('meteor');
-    }, 600);
-  }
-  // 烟花连续发射
-  if (name === 'firework') {
-    _fxInterval = setInterval(() => {
-      if (!running || effectName !== name) { clearInterval(_fxInterval); _fxInterval = null; return; }
-      spawnParticles('firework');
-    }, 1500);
-  }
+  // 持续补充 (在return之前就不会被执行, 移到triggerEffect里)
 }
 
 // ── 渲染循环 ──
