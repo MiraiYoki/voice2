@@ -14,6 +14,12 @@ export function joinRoom(asCreator) {
   const nameEl = $('create-name'), pwEl = $('create-pw');
   const roomName = (nameEl && nameEl.value) ? nameEl.value.trim() : '';
   if (!roomName) { toast('请输入房间名称'); return; }
+
+  // 创建房间时检查重名
+  if (asCreator && state.rooms.has(roomName)) {
+    if (!confirm('房间 "' + roomName + '" 已存在，确定要加入已有房间？')) return;
+  }
+
   const hasPassword = !!(pwEl && pwEl.value);
   const password = hasPassword ? pwEl.value : '';
 
@@ -23,7 +29,7 @@ export function joinRoom(asCreator) {
 
   // MQTT 注册
   state.regMqtt.publish('voice-registry/' + roomName,
-    JSON.stringify({ hasPassword, memberCount: 1 }), { retain: true });
+    JSON.stringify({ hasPassword, memberCount: 1, _ts: Date.now() }), { retain: true });
 
   // 隐藏面板，显示游戏UI
   ['home-panel','room-panel','profile-panel','create-panel'].forEach(id => {
@@ -38,6 +44,18 @@ export function joinRoom(asCreator) {
   setRoomWill(roomName);
   const tbtn = $('btn-theme');
   if (tbtn) tbtn.style.display = asCreator ? '' : 'none';
+  // 填充主题列表
+  const tpanel = $('theme-panel');
+  if (tpanel) {
+    tpanel.innerHTML = MAP_THEMES.map(t =>
+      '<button class="btn btn-secondary" data-id="' + t.id
+      + '" style="font-size:11px;padding:6px 12px;text-align:left;background:'
+      + (t.id === state.mapTheme ? 'var(--accent)' : 'var(--card)') + '">' + t.name + '</button>'
+    ).join('');
+    tpanel.querySelectorAll('button').forEach(b => {
+      b.onclick = () => selectTheme(b.dataset.id);
+    });
+  }
 }
 
 // ── 9b. 离开房间 ──
@@ -106,24 +124,33 @@ export function leaveRoom() {
   toast('已离开房间');
 }
 
-// ── 9c. 房间主题切换 (房主专属) ──
+// ── 9c. 房间主题切换 (房主专属, 弹出列表) ──
 function switchTheme() {
   if (!state.isRoomCreator) return;
-  const idx = MAP_THEMES.findIndex(t => t.id === state.mapTheme);
-  const next = MAP_THEMES[(idx + 1) % MAP_THEMES.length];
-  state.mapTheme = next.id;
-  try { localStorage.setItem('voice-map-theme', next.id); } catch(e) {}
-  state.mapImg.src = next.src;
+  const panel = $('theme-panel');
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+  // 高亮当前主题
+  panel.querySelectorAll('button').forEach(b => {
+    b.style.background = b.dataset.id === state.mapTheme ? 'var(--accent)' : 'var(--card)';
+  });
+}
+
+function selectTheme(id) {
+  const t = MAP_THEMES.find(th => th.id === id);
+  if (!t) return;
+  state.mapTheme = t.id;
+  try { localStorage.setItem('voice-map-theme', t.id); } catch(e) {}
+  state.mapImg.src = t.src;
   state.mapImg.onload = () => {
     state.worldW = state.mapImg.naturalWidth || 1600;
     state.worldH = state.mapImg.naturalHeight || 1200;
     state.myPos.x = state.worldW / 2;
     state.myPos.y = state.worldH / 2;
   };
-  toast('主题: ' + next.name);
-  // 只在房间内显示按钮
-  const btn = $('btn-theme');
-  if (btn) btn.title = '当前主题: ' + next.name;
+  toast('主题: ' + t.name);
+  const panel = $('theme-panel');
+  if (panel) panel.style.display = 'none';
 }
 
 // ── 9d. 头像缩放 ──
@@ -182,10 +209,9 @@ export function wireUI() {
   // 游戏中按钮
   $('btn-mic').onclick = toggleMic;
   $('btn-leave').onclick = leaveRoom;
-  $('btn-debug').onclick = toggleDebugPanel;
   $('btn-theme').onclick = switchTheme;
 
-  // 调试面板内部按钮
+  // 调试面板内部按钮 (btn-debug 已移除, 面板代码保留)
   wireDebugPanel();
 
   // 全局

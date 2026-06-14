@@ -37,9 +37,20 @@ export function renderRoomList() {
   const search = ($('room-search')?.value || '').toLowerCase();
   const container = $('room-list');
   const empty = $('room-empty');
+  const now = Date.now();
+  const STALE_MS = 120000; // 2分钟无心跳→视为僵尸房间
+
+  // 清理超时房间
+  for (const [n, r] of state.rooms) {
+    if (r._ts && now - r._ts > STALE_MS) state.rooms.delete(n);
+  }
 
   const rooms = [...state.rooms.entries()]
-    .filter(([n]) => n.toLowerCase().includes(search));
+    .filter(([n, r]) => {
+      if (!n.toLowerCase().includes(search)) return false;
+      if (r._ts && now - r._ts > STALE_MS) return false; // 僵尸
+      return true;
+    });
 
   if (rooms.length === 0) {
     empty.style.display = '';
@@ -85,11 +96,11 @@ export function updateRoomCount() {
   $('status').innerHTML = '<span class="room-badge"><span class="dot"></span>'
     + state.currentRoom + ' · ' + count + '人</span>';
 
-  // 所有人更新 MQTT (不只是房主), 保活刷新
+  // 所有人更新 MQTT (不只是房主), 保活刷新 + 时间戳
   const info = state.rooms.get(state.currentRoom);
   if (state.regMqtt?.connected) {
     state.regMqtt.publish('voice-registry/' + state.currentRoom,
-      JSON.stringify({ hasPassword: info?.hasPassword || false, memberCount: count }),
+      JSON.stringify({ hasPassword: info?.hasPassword || false, memberCount: count, _ts: Date.now() }),
       { retain: true });
   }
 }
@@ -146,7 +157,8 @@ function _wireMessageHandler() {
     } else {
       try {
         const d = JSON.parse(msg.toString());
-        state.rooms.set(name, d);
+        // 无时间戳(旧客户端)放行, 有时间戳且超时则忽略
+        if (!d._ts || Date.now() - d._ts < 120000) state.rooms.set(name, d);
       } catch (e) { /* ignore malformed */ }
     }
     renderRoomList();
