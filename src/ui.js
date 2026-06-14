@@ -7,6 +7,7 @@ import { $, toast, simpleHash, showPanel, renderAllLogs, addLog, addChatBubble }
 import { ROOM_SIZE, MAP_THEMES } from './config.js';
 import { connectLiveKit, toggleMic, updateMicUI, removePeer, stopDucking, stopQualityMonitor } from './audio.js';
 import { stopPositionSync } from './netcode.js';
+import { DataPacket_Kind } from 'livekit-client';
 import { renderRoomList, setRoomWill, clearRoomWill, startRoomHeartbeat, stopRoomHeartbeat } from './registry.js';
 
 // ── 9a. 加入房间 ──
@@ -294,7 +295,7 @@ function sendMusicCmd(action, songId) {
   const now = Date.now();
   state._lkRoom.localParticipant.publishData(
     enc.encode(JSON.stringify({ channelId:'music', payload:{ action, songId, ts:now } })),
-    { reliable: true }
+    DataPacket_Kind.RELIABLE
   );
   // 自己也播放
   const song = MUSIC_PLAYLIST.find(s => s.id === songId);
@@ -331,7 +332,16 @@ function showThemeModal() {
         state.worldW = state.mapImg.naturalWidth || 1600; state.worldH = state.mapImg.naturalHeight || 1200;
         state.myPos.x = state.worldW / 2; state.myPos.y = state.worldH / 2;
       };
-      toast('主题: ' + t.name); modal.style.display = 'none'; backdrop.style.display = 'none';
+      toast('主题: ' + t.name);
+      // 全房间同步
+      if (state._lkRoom?.localParticipant) {
+        const enc = new TextEncoder();
+        state._lkRoom.localParticipant.publishData(
+          enc.encode(JSON.stringify({ channelId:'theme', payload:{ map:t.id } })),
+          DataPacket_Kind.RELIABLE
+        );
+      }
+      modal.style.display = 'none'; backdrop.style.display = 'none';
     };
   });
   modal.style.display = 'flex'; backdrop.style.display = 'block';
@@ -367,7 +377,7 @@ function broadcastFx(fxId) {
     const enc = new TextEncoder();
     state._lkRoom.localParticipant.publishData(
       enc.encode(JSON.stringify({ channelId:'fx', payload:{ fx:fxId } })),
-      { reliable: true }
+      DataPacket_Kind.RELIABLE
     );
   }
 }
@@ -492,7 +502,7 @@ function playSfx(src) {
     const enc = new TextEncoder();
     state._lkRoom.localParticipant.publishData(
       enc.encode(JSON.stringify({ channelId:'sfx', payload:{ src } })),
-      { reliable: true }
+      DataPacket_Kind.RELIABLE
     );
   }
 }
@@ -509,7 +519,7 @@ function sendChat() {
       const enc = new TextEncoder();
       state._lkRoom.localParticipant.publishData(
         enc.encode(JSON.stringify({ channelId:'chat', payload:{ text } })),
-        { reliable: true }
+        DataPacket_Kind.RELIABLE
       );
     } catch(e) {}
   }
