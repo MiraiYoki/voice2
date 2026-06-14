@@ -40,18 +40,18 @@ export function triggerEffect(name) {
     }, 800);
   }
   if (name === 'meteor') {
-    for (let i = 0; i < 5; i++) spawnParticles('meteor'); // 初始多发几个
+    for (let i = 0; i < 3; i++) spawnParticles('meteor');
     _meteorTimer = setInterval(() => {
       if (!running || effectName !== name) { clearInterval(_meteorTimer); _meteorTimer = null; return; }
       spawnParticles('meteor');
-    }, 600);
+    }, 1200);
   }
   if (name === 'firework') {
-    for (let i = 0; i < 3; i++) spawnParticles('firework'); // 初始多发几个火箭
+    for (let i = 0; i < 3; i++) spawnParticles('firework');
     _fxInterval = setInterval(() => {
       if (!running || effectName !== name) { clearInterval(_fxInterval); _fxInterval = null; return; }
       spawnParticles('firework');
-    }, 1500);
+    }, 900);
   }
   _fxTimer = setTimeout(() => { running = false; canvas.style.display = 'none'; particles = []; _fxTimer = null; }, 15000);
 }
@@ -61,14 +61,13 @@ function spawnParticles(name) {
   const w = canvas.width, h = canvas.height;
 
   if (name === 'meteor') {
-    // 单个流星: 左上区域出发，向右下滑落
-    if (particles.length >= 30) return; // 流星上限少一些
-    const fromLeft = Math.random() * w * 0.6;
+    if (particles.filter(p=>!p.trail).length >= 15) return; // 流星上限
+    const fromLeft = Math.random() * w * 0.5;
     particles.push({
-      x: fromLeft, y: -10 - Math.random() * 60,
-      vx: 0.8 + Math.random() * 1.2, vy: 1.5 + Math.random() * 2,
-      r: 1 + Math.random() * 2, len: 60 + Math.random() * 50,
-      color: '#fbbf24', life: 1, trail: [],
+      x: fromLeft, y: -10 - Math.random() * 40,
+      vx: 1.2 + Math.random() * 1.8, vy: 2.5 + Math.random() * 3,
+      r: 1.5 + Math.random() * 2, len: 80 + Math.random() * 70,
+      color: '#fbbf24', life: 0.5, trail: [],
     });
     return;
   }
@@ -144,13 +143,13 @@ export function startFxLoop() {
       if (p.phase === 'rise' && p.y <= p.burstY) {
         // 爆炸!
         const colors = ['#f472b6','#fb923c','#fbbf24','#a3e635','#38bdf8','#c084fc'];
-        for (let j = 0; j < 35; j++) {
+        for (let j = 0; j < 30; j++) {
           const a = Math.random() * Math.PI * 2;
-          const spd = 1.5 + Math.random() * 3;
+          const spd = 2 + Math.random() * 4;
           particles.push({
             x: p.x, y: p.y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd,
-            r: 1.5+Math.random()*2, life: 1, color: colors[Math.floor(Math.random()*colors.length)],
-            friction: 0.97, phase: 'burst',
+            r: 1.5+Math.random()*2, life: 0.4, color: colors[Math.floor(Math.random()*colors.length)],
+            friction: 0.9, phase: 'burst',
           });
         }
         // 移除火箭
@@ -167,12 +166,20 @@ export function startFxLoop() {
         ctx.beginPath(); ctx.ellipse(0, 0, p.r, p.r*0.5, 0, 0, Math.PI*2); ctx.fill();
         ctx.restore();
       } else if (effectName === 'meteor') {
-        ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = p.color; ctx.lineWidth = p.r;
-        ctx.shadowColor = p.color; ctx.shadowBlur = 8;
-        ctx.beginPath(); ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x - p.vx*0.1*p.len, p.y - p.vy*0.1*p.len); ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.shadowBlur = 15;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r*1.5, 0, Math.PI*2); ctx.fill();
+        ctx.save(); ctx.globalAlpha = alpha;
+        // 金色渐变拖尾
+        const tx = p.x - p.vx * 0.08 * p.len;
+        const ty = p.y - p.vy * 0.08 * p.len;
+        const grad = ctx.createLinearGradient(tx, ty, p.x, p.y);
+        grad.addColorStop(0, 'rgba(251,191,36,0)');
+        grad.addColorStop(0.4, 'rgba(251,191,36,0.5)');
+        grad.addColorStop(1, 'rgba(255,255,255,0.9)');
+        ctx.strokeStyle = grad; ctx.lineWidth = p.r * 2;
+        ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(p.x, p.y); ctx.stroke();
+        // 头部光点
+        ctx.fillStyle = '#fff'; ctx.shadowBlur = 20; ctx.shadowColor = '#fbbf24';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.5, 0, Math.PI*2); ctx.fill();
         ctx.restore();
       } else if (effectName === 'snow') {
         p.rot += p.rotV;
