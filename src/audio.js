@@ -500,20 +500,17 @@ export async function connectLiveKit(roomName) {
       updateMicUI(true);
       addLog('audio', '🎤 麦克风已获取, tracks=' + state.localStream.getAudioTracks().length);
 
-      // 自检本地麦克风音量
+      // 自检本地麦克风音量 (持续更新, 驱动自己说话光晕)
       if (state.audioCtx) {
         const selfSrc = state.audioCtx.createMediaStreamSource(state.localStream);
         const selfA = state.audioCtx.createAnalyser();
         selfA.fftSize = 256;
         selfSrc.connect(selfA);
         const selfBuf = new Uint8Array(selfA.frequencyBinCount);
-        let selfTicks = 0;
-        const selfTimer = setInterval(() => {
+        setInterval(() => {
           selfA.getByteFrequencyData(selfBuf);
-          const avg = selfBuf.reduce((a,b)=>a+b,0)/selfBuf.length;
-          if (selfTicks++ < 5) addLog('audio', '🎙️ 本地音量#' + selfTicks + ': ' + avg.toFixed(1));
-          if (selfTicks >= 10) clearInterval(selfTimer);
-        }, 500);
+          state.localVol = selfBuf.reduce((a,b)=>a+b,0)/selfBuf.length;
+        }, 100);
       }
     } catch (e) {
       addLog('err', '⚠️ 麦克风获取失败: ' + e.message);

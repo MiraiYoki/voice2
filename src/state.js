@@ -99,6 +99,7 @@ const _rawState = {
   audioCtx: null,
   micOn: true,
   micBusy: false,
+  localVol: 0,           // 本地麦克风实时音量
   _closing: false,       // leaveRoom 中置 true, 阻止 toggleMic
 
   // ── 地图 & 相机 ──

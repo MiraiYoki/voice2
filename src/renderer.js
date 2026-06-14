@@ -259,18 +259,22 @@ function drawPeer(ctx, pid, p) {
     drawPeerColor(ctx, sp, r, isSpk, p, pid);
   }
 
+  // mic 状态环 (绿=开, 红=关)
+  if (p.micOn === false) {
+    ctx.strokeStyle = 'rgba(224,73,73,0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(sp.x, sp.y, r + 3, 0, Math.PI * 2); ctx.stroke();
+  } else {
+    ctx.strokeStyle = 'rgba(34,197,94,0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(sp.x, sp.y, r + 3, 0, Math.PI * 2); ctx.stroke();
+  }
+
   // 名字
   ctx.fillStyle = 'rgba(255,255,255,.85)';
   ctx.font = '10px -apple-system,system-ui,sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText((p.name || pid || '').slice(-8), sp.x, sp.y + r + 12);
-
-  // 静音
-  if (p.micOn === false) {
-    ctx.fillStyle = '#e04949';
-    ctx.font = '10px system-ui';
-    ctx.fillText('🔇', sp.x, sp.y + r + 24);
-  }
 }
 
 function drawPeerColor(ctx, sp, r, isSpk, p, pid) {
@@ -295,8 +299,19 @@ function drawPeerColor(ctx, sp, r, isSpk, p, pid) {
 // ── 6d. 自己 ──
 function drawSelf(ctx) {
   const mp = w2s(state.myPos.x, state.myPos.y), mr = 20;
+  const selfSpk = (state.localVol || 0) > 5;
 
-  // 光环
+  // 说话光环 (自己)
+  if (selfSpk) {
+    const sg = ctx.createRadialGradient(mp.x, mp.y, mr * 0.5, mp.x, mp.y, mr * 2.5);
+    sg.addColorStop(0, 'rgba(255,255,255,.6)');
+    sg.addColorStop(0.5, 'rgba(34,197,94,.25)');
+    sg.addColorStop(1, 'rgba(34,197,94,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.arc(mp.x, mp.y, mr * 2.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 常驻光环
   const mg = ctx.createRadialGradient(mp.x, mp.y, mr * 0.3, mp.x, mp.y, mr * 2.2);
   mg.addColorStop(0, 'rgba(255,255,255,.4)');
   mg.addColorStop(1, 'rgba(155,77,255,0)');

@@ -33,7 +33,7 @@ export const COLORS = [
 export { LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET } from './secrets.js';
 
 // 移动速度
-export const MOVE_SPEED = 2.2;
+export const MOVE_SPEED = 2.64;  // +20%
 
 // 空间音频 (对标 spatial-audio: 像素坐标直传)
 export const PANNER_REF_DISTANCE   = 120;
