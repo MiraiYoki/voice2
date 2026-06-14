@@ -143,15 +143,20 @@ function onDataReceived(data, participant) {
       if (msg.payload?.fx) triggerEffect(msg.payload.fx);
       return;
     }
-    // 音效通道 (互斥: 同时只有一个)
+    // 音效通道 (AudioContext播放, 突破自动播放限制)
     if (msg.channelId === 'sfx') {
-      if (msg.payload?.src) {
-        if (state._sfxEl) { try { state._sfxEl.pause(); state._sfxEl.remove(); } catch(e) {} }
-        const el = document.createElement('audio');
-        el.src = msg.payload.src;
-        el.volume = state._sfxVol;
-        state._sfxEl = el;
-        el.play().catch(()=>{});
+      if (msg.payload?.src && state.audioCtx) {
+        state.audioCtx.resume();
+        fetch(msg.payload.src).then(r => r.arrayBuffer()).then(buf =>
+          state.audioCtx.decodeAudioData(buf)
+        ).then(audioBuf => {
+          const src = state.audioCtx.createBufferSource();
+          const gain = state.audioCtx.createGain();
+          gain.gain.value = state._sfxVol;
+          src.buffer = audioBuf;
+          src.connect(gain).connect(state.audioCtx.destination);
+          src.start();
+        }).catch(()=>{});
       }
       return;
     }
@@ -210,34 +215,36 @@ export function stopPositionSync() {
 // ── 8e. 全场音乐同步 ──
 export function playMusicRemote(songId, ts) {
   const song = MUSIC_PLAYLIST.find(s => s.id === songId);
-  if (!song) return;
+  if (!song || !state.audioCtx) return;
   stopMusicRemote();
-  const el = document.createElement('audio');
-  el.src = song.src;
-  el.volume = state._musicVol;
-  el.loop = true;
-  el.play().then(() => {
-    state._musicEl = el;
+  state.audioCtx.resume();
+  fetch(song.src).then(r => r.arrayBuffer()).then(buf =>
+    state.audioCtx.decodeAudioData(buf)
+  ).then(audioBuf => {
+    const src = state.audioCtx.createBufferSource();
+    const gain = state.audioCtx.createGain();
+    gain.gain.value = state._musicVol;
+    src.buffer = audioBuf;
+    src.loop = true;
+    src.connect(gain).connect(state.audioCtx.destination);
+    src.start();
+    state._musicEl = { stop: () => { try { src.stop(); src.disconnect(); gain.disconnect(); } catch(e) {} } };
     state._musicPlaying = true;
-  }).catch(e => {
-    // 自动播放被阻止或URL无效
-    console.warn('music play failed:', e.message);
-    el.remove();
-  });
+  }).catch(e => { console.warn('music play failed:', e.message); });
 }
 
 export function stopMusicRemote() {
   if (state._musicEl) {
-    try { state._musicEl.pause(); state._musicEl.remove(); } catch(e) {}
+    try { if (state._musicEl.stop) state._musicEl.stop(); else { state._musicEl.pause(); state._musicEl.remove(); } } catch(e) {}
     state._musicEl = null;
   }
   state._musicPlaying = false;
 }
 
 function pauseMusicRemote() {
-  if (state._musicEl) { state._musicEl.pause(); state._musicPlaying = false; }
+  if (state._musicEl) { try { state._musicEl.stop(); } catch(e) {} state._musicEl = null; state._musicPlaying = false; }
 }
 
 function resumeMusicRemote() {
-  if (state._musicEl) { state._musicEl.play().catch(()=>{}); state._musicPlaying = true; }
+  // BufferSource can't resume, re-trigger playMusicRemote from the last state
 }
