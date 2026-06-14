@@ -27,10 +27,6 @@ export function joinRoom(asCreator) {
   state.currentRoom = roomName;
   state.isRoomCreator = asCreator;
 
-  // MQTT 注册
-  state.regMqtt.publish('voice-registry/' + roomName,
-    JSON.stringify({ hasPassword, memberCount: 1, _ts: Date.now() }), { retain: true });
-
   // 隐藏面板，显示游戏UI
   ['home-panel','room-panel','profile-panel','create-panel'].forEach(id => {
     const p = $(id); if (p) p.style.display = 'none';
@@ -43,6 +39,13 @@ export function joinRoom(asCreator) {
   connectLiveKit(roomName);
   setRoomWill(roomName);
   startRoomHeartbeat();
+  // 延迟发布确保MQTT重连完成
+  setTimeout(() => {
+    if (state.regMqtt?.connected) {
+      state.regMqtt.publish('voice-registry/' + roomName,
+        JSON.stringify({ hasPassword, memberCount: 1, _ts: Date.now() }), { retain: true });
+    }
+  }, 500);
   $('btn-leave-top').style.display = '';
 }
 
